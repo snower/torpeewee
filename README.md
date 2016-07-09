@@ -1,19 +1,18 @@
 # torpeewee
----
+
 Tornado asynchronous ORM by peewee
 
 
 # About
----
+
 torpeewee - Tornado asynchronous ORM by peewee.
 
 # Installation
----
 
     pip install TorMySQL
 
 # Examples
----
+
 ```python
 # -*- coding: utf-8 -*-
 # 16/7/7
@@ -115,5 +114,5 @@ ioloop.run_sync(run)
 ```
 
 # License
----
+
 torpeewee uses the MIT license, see LICENSE file for the details.
