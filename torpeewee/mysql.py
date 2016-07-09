@@ -180,9 +180,6 @@ class Transaction(AsyncMySQLDatabase):
     def _connect(self, database, **kwargs):
         raise NotImplementedError
 
-    def close(self):
-        raise NotImplementedError
-
     @gen.coroutine
     def get_conn(self):
         if self.connection is None:
@@ -247,16 +244,6 @@ class Transaction(AsyncMySQLDatabase):
             else:
                 self.close()
 
-    def __call__(self, func):
-        @gen.coroutine
-        @wraps(func)
-        def _(*args, **kwargs):
-            with self:
-                result = yield func(transaction = self, *args, **kwargs)
-            raise gen.Return(result)
-
-        return _
-
     def close(self):
         if self.connection:
             self.database._close(self.connection)
@@ -279,7 +266,7 @@ class TransactionFuture(gen.Future):
         @gen.coroutine
         @wraps(func)
         def _(*args, **kwargs):
-            self.transaction.begin()
+            yield self.transaction.begin()
             with self:
                 result = yield func(transaction=self.transaction, *args, **kwargs)
             raise gen.Return(result)

@@ -1,6 +1,20 @@
 # torpeewee
+---
 Tornado asynchronous ORM by peewee
 
+
+# About
+---
+torpeewee - Tornado asynchronous ORM by peewee.
+
+# Installation
+---
+
+    pip install TorMySQL
+
+# Examples
+---
+```python
 # -*- coding: utf-8 -*-
 # 16/7/7
 # create by: snower
@@ -10,7 +24,7 @@ from tornado import gen
 from tornado.ioloop import IOLoop
 from torpeewee import *
 
-db = MySQLDatabase("test", host="172.16.0.2", user="root", passwd="moge123456")
+db = MySQLDatabase("test", host="127.0.0.1", port=3307, user="root", passwd="moge123456")
 
 class BaseModel(Model):
     class Meta:
@@ -98,3 +112,8 @@ def run():
     yield run_transaction()
 
 ioloop.run_sync(run)
+```
+
+# License
+---
+torpeewee uses the MIT license, see LICENSE file for the details.
