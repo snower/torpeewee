@@ -49,20 +49,22 @@ class SelectQuery(gen.Future, BaseSelectQuery):
     def get(self):
         clone = self.paginate(1, 1)
         try:
-            raise gen.Return(next((yield clone.execute())))
+            result = next((yield clone.execute()))
         except StopIteration:
             raise self.model_class.DoesNotExist(
                 'Instance matching query does not exist:\nSQL: %s\nPARAMS: %s'
                 % self.sql())
+        raise gen.Return(result)
 
     @gen.coroutine
     def first(self):
         res = yield self.execute()
         res.fill_cache(1)
         try:
-            raise gen.Return(res._result_cache[0])
+            result = res._result_cache[0]
         except IndexError:
-            pass
+            result = None
+        raise gen.Return(result)
 
     @gen.coroutine
     def exists(self):
