@@ -309,8 +309,9 @@ class MySQLDatabase(AsyncMySQLDatabase):
                 raise Exception('Error, database not properly initialized '
                                 'before closing connection')
             with self.exception_wrapper():
-                self.__local.conn.close()
-                self.__local.closed = True
+                if not self._Database__local.closed and self._Database__local.conn:
+                    self._Database__local.conn.close()
+                    self._Database__local.closed = True
 
     @gen.coroutine
     def get_conn(self):

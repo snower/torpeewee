@@ -177,7 +177,7 @@ class UpdateQuery(gen.Future, BaseUpdateQuery):
                 self.set_result(future.result())
 
         self._future.add_done_callback(on_done)
-        super(SelectQuery, self).add_done_callback(fn)
+        super(UpdateQuery, self).add_done_callback(fn)
 
 class InsertQuery(gen.Future, BaseInsertQuery):
     def __init__(self, *args, **kwargs):
@@ -275,7 +275,7 @@ class InsertQuery(gen.Future, BaseInsertQuery):
                 self.set_result(future.result())
 
         self._future.add_done_callback(on_done)
-        super(SelectQuery, self).add_done_callback(fn)
+        super(InsertQuery, self).add_done_callback(fn)
 
 class DeleteQuery(gen.Future, BaseDeleteQuery):
     def __init__(self, *args, **kwargs):
@@ -331,7 +331,7 @@ class DeleteQuery(gen.Future, BaseDeleteQuery):
                 self.set_result(future.result())
 
         self._future.add_done_callback(on_done)
-        super(SelectQuery, self).add_done_callback(fn)
+        super(DeleteQuery, self).add_done_callback(fn)
 
 class RawQuery(gen.Future, BaseRawQuery):
     def __init__(self, *args, **kwargs):
@@ -381,7 +381,7 @@ class RawQuery(gen.Future, BaseRawQuery):
                 self.set_result(future.result())
 
         self._future.add_done_callback(on_done)
-        super(SelectQuery, self).add_done_callback(fn)
+        super(RawQuery, self).add_done_callback(fn)
 
     def __iter__(self):
         raise NotImplementedError()
