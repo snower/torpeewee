@@ -12,6 +12,7 @@ setup(
     install_requires=[
         'tornado>=4.1',
         'TorMySQL>=0.2.5',
+        'peewee>=2.8.1'
     ],
     author=['snower'],
     author_email=['sujian199@gmail.com'],
