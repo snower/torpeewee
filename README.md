@@ -1,7 +1,8 @@
 # torpeewee
 
-Tornado asynchronous ORM by peewee
+[![Build Status](https://travis-ci.org/snower/torpeewee.svg?branch=master)](https://travis-ci.org/snower/torpeewee)
 
+Tornado asynchronous ORM by peewee
 
 # About
 
