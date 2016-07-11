@@ -17,6 +17,7 @@ PARAMS = dict(
 )
 
 db = MySQLDatabase(
+    "test",
     max_connections=int(os.getenv("MYSQL_POOL", 5)),
     idle_seconds=7200,
     **PARAMS
