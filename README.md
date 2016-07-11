@@ -9,7 +9,7 @@ torpeewee - Tornado asynchronous ORM by peewee.
 
 # Installation
 
-    pip install TorMySQL
+    pip install torpeewee
 
 # Examples
 
