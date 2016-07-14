@@ -5,7 +5,8 @@
 import sys
 from functools import wraps
 from tornado.ioloop import IOLoop
-from tornado import gen, raise_exc_info
+from tornado import gen
+from tornado.util import raise_exc_info
 import tormysql
 from peewee import MySQLDatabase as BaseMySQLDatabase, IndexMetadata, ColumnMetadata, ForeignKeyMetadata, \
     sort_models_topologically
