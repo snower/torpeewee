@@ -29,5 +29,5 @@ from .model import Model, Using
 from .mysql import MySQLDatabase, Transaction
 from .query import SelectQuery, InsertQuery, UpdateQuery, DeleteQuery, RawQuery
 
-version = "0.0.1"
-version_info = (0, 0, 1)
+version = "0.0.2"
+version_info = (0, 0, 2)
