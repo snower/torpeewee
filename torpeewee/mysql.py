@@ -2,9 +2,10 @@
 # 16/6/28
 # create by: snower
 
+import sys
 from functools import wraps
 from tornado.ioloop import IOLoop
-from tornado import gen
+from tornado import gen, raise_exc_info
 import tormysql
 from peewee import MySQLDatabase as BaseMySQLDatabase, IndexMetadata, ColumnMetadata, ForeignKeyMetadata, \
     sort_models_topologically
@@ -170,6 +171,7 @@ class AsyncMySQLDatabase(BaseMySQLDatabase):
             cursor = yield self.execute_sql(*qc.drop_sequence(seq))
             raise gen.Return(cursor)
 
+
 class Transaction(AsyncMySQLDatabase):
     def __init__(self, database):
         super(Transaction, self).__init__(self, database.database)
@@ -215,11 +217,13 @@ class Transaction(AsyncMySQLDatabase):
     def commit(self):
         if self.connection:
             yield self.connection.commit()
+            self.close()
 
     @gen.coroutine
     def rollback(self):
         if self.connection:
             yield self.connection.rollback()
+            self.close()
 
     def __enter__(self):
         return self
@@ -249,6 +253,7 @@ class Transaction(AsyncMySQLDatabase):
             self.database._close(self.connection)
             self.connection = None
 
+
 class TransactionFuture(gen.Future):
     def __init__(self, database):
         super(TransactionFuture, self).__init__()
@@ -267,9 +272,15 @@ class TransactionFuture(gen.Future):
         @wraps(func)
         def _(*args, **kwargs):
             yield self.transaction.begin()
-            with self:
+            try:
                 result = yield func(transaction=self.transaction, *args, **kwargs)
-            raise gen.Return(result)
+            except:
+                exc_info = sys.exc_info()
+                yield self.transaction.rollback()
+                raise_exc_info(exc_info)
+            else:
+                yield self.transaction.commit()
+                raise gen.Return(result)
         return _
 
     def add_done_callback(self, fn):
@@ -286,6 +297,7 @@ class TransactionFuture(gen.Future):
 
         self._future.add_done_callback(on_done)
         super(TransactionFuture, self).add_done_callback(fn)
+
 
 class MySQLDatabase(AsyncMySQLDatabase):
     def __init__(self, *args, **kwargs):
@@ -343,10 +355,4 @@ class MySQLDatabase(AsyncMySQLDatabase):
         return TransactionFuture(self)
 
     def commit_on_success(self, func):
-        @gen.coroutine
-        @wraps(func)
-        def inner(*args, **kwargs):
-            with (yield self.transaction()) as transaction:
-                result = yield func(transaction=transaction, *args, **kwargs)
-            raise gen.Return(result)
-        return inner
+        return self.transaction()(func)

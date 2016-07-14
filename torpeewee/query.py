@@ -6,8 +6,10 @@ from tornado import gen
 from peewee import SQL, operator, RESULTS_TUPLES, RESULTS_DICTS, RESULTS_NAIVE
 from peewee import SelectQuery as BaseSelectQuery, UpdateQuery as BaseUpdateQuery, InsertQuery as BaseInsertQuery, DeleteQuery as BaseDeleteQuery, RawQuery as BaseRawQuery
 
+
 class QueryIsDoneError(Exception):
     pass
+
 
 class SelectQuery(gen.Future, BaseSelectQuery):
     def __init__(self, *args, **kwargs):
@@ -113,6 +115,7 @@ class SelectQuery(gen.Future, BaseSelectQuery):
         self._future.add_done_callback(on_done)
         super(SelectQuery, self).add_done_callback(fn)
 
+
 class UpdateQuery(gen.Future, BaseUpdateQuery):
     def __init__(self, *args, **kwargs):
         BaseUpdateQuery.__init__(self, *args, **kwargs)
@@ -178,6 +181,7 @@ class UpdateQuery(gen.Future, BaseUpdateQuery):
 
         self._future.add_done_callback(on_done)
         super(UpdateQuery, self).add_done_callback(fn)
+
 
 class InsertQuery(gen.Future, BaseInsertQuery):
     def __init__(self, *args, **kwargs):
@@ -277,6 +281,7 @@ class InsertQuery(gen.Future, BaseInsertQuery):
         self._future.add_done_callback(on_done)
         super(InsertQuery, self).add_done_callback(fn)
 
+
 class DeleteQuery(gen.Future, BaseDeleteQuery):
     def __init__(self, *args, **kwargs):
         BaseDeleteQuery.__init__(self, *args, **kwargs)
@@ -332,6 +337,7 @@ class DeleteQuery(gen.Future, BaseDeleteQuery):
 
         self._future.add_done_callback(on_done)
         super(DeleteQuery, self).add_done_callback(fn)
+
 
 class RawQuery(gen.Future, BaseRawQuery):
     def __init__(self, *args, **kwargs):

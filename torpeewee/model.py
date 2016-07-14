@@ -201,6 +201,7 @@ class Model(BaseModel):
         result = yield self.delete().where(self._pk_expr()).execute()
         raise gen.Return(result)
 
+
 class Using(object):
     model_class = None
     database = None
