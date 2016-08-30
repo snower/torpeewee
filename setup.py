@@ -7,7 +7,7 @@ from setuptools import setup
 
 setup(
     name='torpeewee',
-    version='0.0.2',
+    version='0.0.3',
     packages=['torpeewee'],
     install_requires=[
         'tornado>=4.1',
@@ -19,7 +19,7 @@ setup(
     url='https://github.com/snower/torpeewee',
     license='MIT',
     keywords=[
-        "tornado", "mysql", "orm", "tormysql"
+        "tornado", "mysql", "postgresql", "orm", "tormysql", "momoko"
     ],
     description='Tornado asynchronous ORM by peewee',
     long_description=open("README.md").read(),
