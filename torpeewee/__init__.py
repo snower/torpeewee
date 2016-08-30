@@ -26,7 +26,9 @@ SOFTWARE.
 
 from peewee import *
 from .model import Model, Using
-from .mysql import MySQLDatabase, Transaction
+from .mysql import MySQLDatabase
+from .postgresql import PostgreSQLDatabase
+from .transaction import Transaction
 from .query import SelectQuery, InsertQuery, UpdateQuery, DeleteQuery, RawQuery
 
 version = "0.0.2"
