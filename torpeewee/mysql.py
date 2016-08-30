@@ -194,6 +194,9 @@ class MySQLDatabase(AsyncMySQLDatabase):
 
         super(MySQLDatabase, self).__init__(*args, **kwargs)
 
+        self._closed = True
+        self._conn_pool = None
+
     def _connect(self, database, **kwargs):
         conn_kwargs = {
             'charset': 'utf8',
@@ -210,15 +213,18 @@ class MySQLDatabase(AsyncMySQLDatabase):
                 raise Exception('Error, database not properly initialized '
                                 'before closing connection')
             with self.exception_wrapper():
-                if not self._Database__local.closed and self._Database__local.conn:
-                    self._Database__local.conn.close()
-                    self._Database__local.closed = True
+                if not self._closed and self._conn_pool:
+                    self._conn_pool.close()
+                    self._closed = True
 
     @gen.coroutine
     def get_conn(self):
-        if self._Database__local.closed:
-            self.connect()
-        conn = yield self._Database__local.conn.Connection()
+        if self._closed:
+            with self.exception_wrapper():
+                self._conn_pool = self._connect(self.database, **self.connect_kwargs)
+                self._closed = False
+                self.initialize_connection(self._conn_pool)
+        conn = yield self._conn_pool.Connection()
         raise gen.Return(conn)
 
     @gen.coroutine

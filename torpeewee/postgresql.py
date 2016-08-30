@@ -268,6 +268,9 @@ class PostgreSQLDatabase(AsyncPostgreSQLDatabase):
 
         super(PostgreSQLDatabase, self).__init__(*args, **kwargs)
 
+        self._closed = True
+        self._conn_pool = None
+
     def _connect(self, database, **kwargs):
         pool_kwargs = {}
         for key in ['connection_factory', 'cursor_factory', 'size', 'max_size', 'ioloop', 'raise_connect_errors',
@@ -298,16 +301,19 @@ class PostgreSQLDatabase(AsyncPostgreSQLDatabase):
                 raise Exception('Error, database not properly initialized '
                                 'before closing connection')
             with self.exception_wrapper():
-                if not self._Database__local.closed and self._Database__local.conn:
-                    self._Database__local.conn.close()
-                    self._Database__local.closed = True
+                if not self._closed and self._conn_pool:
+                    self._conn_pool.close()
+                    self._closed = True
 
     @gen.coroutine
     def get_conn(self):
-        if self._Database__local.closed:
-            self.connect()
-            yield self._Database__local.conn.connect()
-        conn = yield self._Database__local.conn.getconn(False)
+        if self._closed:
+            with self.exception_wrapper():
+                self._conn_pool = self._connect(self.database, **self.connect_kwargs)
+                self._closed = False
+                self.initialize_connection(self._conn_pool)
+            yield self._conn_pool.connect()
+        conn = yield self._conn_pool.getconn(False)
         raise gen.Return(conn)
 
     @gen.coroutine
@@ -336,4 +342,4 @@ class PostgreSQLDatabase(AsyncPostgreSQLDatabase):
         return self.transaction()(func)
 
     def _close(self, conn):
-        self._Database__local.conn.putconn(conn)
+        self._conn_pool.putconn(conn)
