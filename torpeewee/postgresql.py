@@ -4,9 +4,13 @@
 
 import re
 from tornado import gen
-import momoko
 from peewee import PostgresqlDatabase as BasePostgreSQLDatabase, IndexMetadata, ColumnMetadata, ForeignKeyMetadata, sort_models_topologically
 from .transaction import Transaction as BaseTransaction, TransactionFuture as BaseTransactionFuture
+
+try:
+    import momoko
+except ImportError:
+    momoko = None
 
 
 def _param_escape(s, re_escape=re.compile(r"([\\'])"), re_space=re.compile(r'\s')):

@@ -3,9 +3,13 @@
 # create by: snower
 
 from tornado import gen
-import tormysql
 from peewee import MySQLDatabase as BaseMySQLDatabase, IndexMetadata, ColumnMetadata, ForeignKeyMetadata, sort_models_topologically
 from .transaction import Transaction as BaseTransaction, TransactionFuture as BaseTransactionFuture
+
+try:
+    import tormysql
+except ImportError:
+    tormysql = None
 
 class AsyncMySQLDatabase(BaseMySQLDatabase):
     def begin(self):

@@ -11,7 +11,6 @@ setup(
     packages=['torpeewee'],
     install_requires=[
         'tornado>=4.1',
-        'TorMySQL>=0.2.5',
         'peewee>=2.8.1'
     ],
     author=['snower'],
