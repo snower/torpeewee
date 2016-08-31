@@ -62,21 +62,15 @@ class Transaction(object):
         if self.connection is None:
             return
 
-        future = None
-        try:
-            if exc_type:
-                future = self.connection.rollback()
-            else:
-                try:
-                    future = self.connection.commit()
-                except:
-                    future = self.connection.rollback()
-                    raise
-        finally:
-            if future:
-                IOLoop.current().add_future(future, lambda future: self.close())
-            else:
-                self.close()
+        if exc_type:
+            self.rollback()
+        else:
+            try:
+                self.commit()
+            except:
+                exc_info = sys.exc_info()
+                self.rollback()
+                raise_exc_info(exc_info)
 
     def close(self):
         if self.connection:

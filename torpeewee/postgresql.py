@@ -4,7 +4,7 @@
 
 import re
 from tornado import gen
-from peewee import PostgresqlDatabase as BasePostgreSQLDatabase, IndexMetadata, ColumnMetadata, ForeignKeyMetadata, sort_models_topologically
+from peewee import PostgresqlDatabase as BasePostgresqlDatabase, IndexMetadata, ColumnMetadata, ForeignKeyMetadata, sort_models_topologically
 from .transaction import Transaction as BaseTransaction, TransactionFuture as BaseTransactionFuture
 
 try:
@@ -22,7 +22,7 @@ def _param_escape(s, re_escape=re.compile(r"([\\'])"), re_space=re.compile(r'\s'
 
     return s
 
-class AsyncPostgreSQLDatabase(BasePostgreSQLDatabase):
+class AsyncPostgresqlDatabase(BasePostgresqlDatabase):
     def begin(self):
         raise NotImplementedError
 
@@ -248,12 +248,42 @@ class AsyncPostgreSQLDatabase(BasePostgreSQLDatabase):
             raise gen.Return(cursor)
 
 
-class Transaction(BaseTransaction, AsyncPostgreSQLDatabase):
+class Transaction(BaseTransaction, AsyncPostgresqlDatabase):
     def __init__(self, database):
-        AsyncPostgreSQLDatabase.__init__(self, database.database)
+        AsyncPostgresqlDatabase.__init__(self, database.database)
 
         self.database = database
         self.connection = None
+
+    @gen.coroutine
+    def get_cursor(self):
+        raise NotImplementedError()
+
+    @gen.coroutine
+    def execute_sql(self, sql, params=None, require_commit=True):
+        if self.connection is None:
+            yield self.begin()
+
+        with self.database.exception_wrapper():
+            cursor = yield self.connection.execute(sql, params or ())
+        raise gen.Return(cursor)
+
+    @gen.coroutine
+    def begin(self):
+        self.connection = yield self.database.get_conn()
+        yield self.connection.execute("BEGIN;")
+
+    @gen.coroutine
+    def commit(self):
+        if self.connection:
+            yield self.connection.execute("COMMIT;")
+            self.close()
+
+    @gen.coroutine
+    def rollback(self):
+        if self.connection:
+            yield self.connection.execute("ROLLBACK;")
+            self.close()
 
 class TransactionFuture(BaseTransactionFuture):
     def __init__(self, database):
@@ -262,11 +292,11 @@ class TransactionFuture(BaseTransactionFuture):
         self.transaction = Transaction(database)
         self._future = None
 
-class PostgreSQLDatabase(AsyncPostgreSQLDatabase):
+class PostgresqlDatabase(AsyncPostgresqlDatabase):
     def __init__(self, *args, **kwargs):
         kwargs["threadlocals"] = False
 
-        super(PostgreSQLDatabase, self).__init__(*args, **kwargs)
+        super(PostgresqlDatabase, self).__init__(*args, **kwargs)
 
         self._closed = True
         self._conn_pool = None
@@ -278,9 +308,7 @@ class PostgreSQLDatabase(AsyncPostgreSQLDatabase):
             if key in kwargs:
                 pool_kwargs[key] = kwargs.pop(key)
 
-        conn_kwargs = {
-            'charset': 'utf8',
-        }
+        conn_kwargs = {"dbname": database}
         conn_kwargs.update(kwargs)
         if 'password' in conn_kwargs:
             conn_kwargs['passwd'] = conn_kwargs.pop('password')
@@ -293,6 +321,9 @@ class PostgreSQLDatabase(AsyncPostgreSQLDatabase):
             conn_kwargs["password"] = conn_kwargs.pop("passwd")
         dsn = " ".join(["%s=%s" % (k, _param_escape(str(v)))
                                 for (k, v) in conn_kwargs.iteritems()])
+
+        if "max_size" not in pool_kwargs:
+            pool_kwargs["max_size"] = 32
         return momoko.Pool(dsn = dsn, **pool_kwargs)
 
     def close(self):
@@ -321,16 +352,14 @@ class PostgreSQLDatabase(AsyncPostgreSQLDatabase):
         with self.exception_wrapper():
             conn = yield self.get_conn()
             try:
-                cursor = conn.cursor()
-                yield cursor.execute(sql, params or ())
-                yield cursor.close()
+                cursor = yield conn.execute(sql, params or ())
             except Exception:
                 if self.get_autocommit() and self.autorollback:
-                    yield conn.rollback()
+                    yield conn.execute("ROLLBACK;")
                 raise
             else:
                 if require_commit and self.get_autocommit():
-                    yield conn.commit()
+                    yield conn.execute("COMMIT;")
             finally:
                 self._close(conn)
         raise gen.Return(cursor)
