@@ -6,7 +6,6 @@ import sys
 from functools import wraps
 from tornado.util import raise_exc_info
 from tornado import gen
-from tornado.ioloop import IOLoop
 
 class Transaction(object):
     def _connect(self, database, **kwargs):
@@ -79,6 +78,12 @@ class Transaction(object):
 
 
 class TransactionFuture(gen.Future):
+    def __init__(self, args_name):
+        super(TransactionFuture, self).__init__()
+
+        self.args_name = args_name
+        self.transaction = None
+
     def __enter__(self):
         return self.transaction.__enter__()
 
@@ -91,7 +96,8 @@ class TransactionFuture(gen.Future):
         def _(*args, **kwargs):
             yield self.transaction.begin()
             try:
-                result = yield func(transaction=self.transaction, *args, **kwargs)
+                kwargs[self.args_name] = self.transaction
+                result = yield func(*args, **kwargs)
             except:
                 exc_info = sys.exc_info()
                 yield self.transaction.rollback()

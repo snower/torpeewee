@@ -286,8 +286,8 @@ class Transaction(BaseTransaction, AsyncPostgresqlDatabase):
             self.close()
 
 class TransactionFuture(BaseTransactionFuture):
-    def __init__(self, database):
-        super(TransactionFuture, self).__init__()
+    def __init__(self, database, args_name):
+        super(TransactionFuture, self).__init__(args_name)
 
         self.transaction = Transaction(database)
         self._future = None
@@ -364,8 +364,8 @@ class PostgresqlDatabase(AsyncPostgresqlDatabase):
                 self._close(conn)
         raise gen.Return(cursor)
 
-    def transaction(self):
-        return TransactionFuture(self)
+    def transaction(self, args_name = "transaction"):
+        return TransactionFuture(self, args_name)
 
     def commit_on_success(self, func):
         return self.transaction()(func)
