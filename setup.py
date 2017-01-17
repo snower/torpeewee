@@ -21,6 +21,6 @@ setup(
         "tornado", "mysql", "postgresql", "orm", "tormysql", "momoko"
     ],
     description='Tornado asynchronous ORM by peewee',
-    long_description=open("README.md").read(),
+    long_description=open("README.rst").read(),
     zip_safe=False,
 )
