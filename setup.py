@@ -7,7 +7,7 @@ from setuptools import setup
 
 setup(
     name='torpeewee',
-    version='0.0.3',
+    version='0.0.4',
     packages=['torpeewee'],
     install_requires=[
         'tornado>=4.1',

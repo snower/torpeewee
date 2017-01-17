@@ -31,5 +31,5 @@ from .postgresql import PostgresqlDatabase
 from .transaction import Transaction
 from .query import SelectQuery, InsertQuery, UpdateQuery, DeleteQuery, RawQuery
 
-version = "0.0.3"
-version_info = (0, 0, 3)
+version = "0.0.4"
+version_info = (0, 0, 4)
