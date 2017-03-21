@@ -41,7 +41,7 @@ class AsyncPostgresqlDatabase(BasePostgresqlDatabase):
     def execution_context_depth(self):
         raise NotImplementedError
 
-    def execution_context(self, with_transaction=True):
+    def execution_context(self, with_transaction=True, transaction_type=None):
         raise NotImplementedError
 
     def push_transaction(self, transaction):
@@ -54,7 +54,7 @@ class AsyncPostgresqlDatabase(BasePostgresqlDatabase):
         raise NotImplementedError
 
     @gen.coroutine
-    def transaction(self):
+    def transaction(self, transaction_type=None):
         raise NotImplementedError
 
     def commit_on_success(self, func):
@@ -63,7 +63,7 @@ class AsyncPostgresqlDatabase(BasePostgresqlDatabase):
     def savepoint(self, sid=None):
         raise NotImplementedError
 
-    def atomic(self):
+    def atomic(self, transaction_type=None):
         raise NotImplementedError
 
     def _get_pk_sequence(self, model):
