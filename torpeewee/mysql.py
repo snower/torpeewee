@@ -30,7 +30,7 @@ class AsyncMySQLDatabase(BaseMySQLDatabase):
     def execution_context_depth(self):
         raise NotImplementedError
 
-    def execution_context(self, with_transaction=True):
+    def execution_context(self, with_transaction=True, transaction_type=None):
         raise NotImplementedError
 
     def push_transaction(self, transaction):
@@ -43,7 +43,7 @@ class AsyncMySQLDatabase(BaseMySQLDatabase):
         raise NotImplementedError
 
     @gen.coroutine
-    def transaction(self):
+    def transaction(self, transaction_type=None):
         raise NotImplementedError
 
     def commit_on_success(self, func):
@@ -52,7 +52,7 @@ class AsyncMySQLDatabase(BaseMySQLDatabase):
     def savepoint(self, sid=None):
         raise NotImplementedError
 
-    def atomic(self):
+    def atomic(self, transaction_type=None):
         raise NotImplementedError
 
     @gen.coroutine
@@ -99,8 +99,7 @@ class AsyncMySQLDatabase(BaseMySQLDatabase):
                     AND referenced_table_name IS NOT NULL
                     AND referenced_column_name IS NOT NULL"""
         cursor = yield self.execute_sql(query, (table,))
-        raise gen.Return([
-                             ForeignKeyMetadata(column, dest_table, dest_column, table)
+        raise gen.Return([ForeignKeyMetadata(column, dest_table, dest_column, table)
                              for column, dest_table, dest_column in cursor.fetchall()])
 
     @gen.coroutine
@@ -212,7 +211,7 @@ class MySQLDatabase(AsyncMySQLDatabase):
             if self.deferred:
                 raise Exception('Error, database not properly initialized '
                                 'before closing connection')
-            with self.exception_wrapper():
+            with self.exception_wrapper:
                 if not self._closed and self._conn_pool:
                     self._conn_pool.close()
                     self._closed = True
@@ -220,7 +219,7 @@ class MySQLDatabase(AsyncMySQLDatabase):
     @gen.coroutine
     def get_conn(self):
         if self._closed:
-            with self.exception_wrapper():
+            with self.exception_wrapper:
                 self._conn_pool = self._connect(self.database, **self.connect_kwargs)
                 self._closed = False
                 self.initialize_connection(self._conn_pool)
@@ -229,7 +228,7 @@ class MySQLDatabase(AsyncMySQLDatabase):
 
     @gen.coroutine
     def execute_sql(self, sql, params=None, require_commit=True):
-        with self.exception_wrapper():
+        with self.exception_wrapper:
             conn = yield self.get_conn()
             try:
                 cursor = conn.cursor()

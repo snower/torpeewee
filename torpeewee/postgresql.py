@@ -264,7 +264,7 @@ class Transaction(BaseTransaction, AsyncPostgresqlDatabase):
         if self.connection is None:
             yield self.begin()
 
-        with self.database.exception_wrapper():
+        with self.database.exception_wrapper:
             cursor = yield self.connection.execute(sql, params or ())
         raise gen.Return(cursor)
 
@@ -331,7 +331,7 @@ class PostgresqlDatabase(AsyncPostgresqlDatabase):
             if self.deferred:
                 raise Exception('Error, database not properly initialized '
                                 'before closing connection')
-            with self.exception_wrapper():
+            with self.exception_wrapper:
                 if not self._closed and self._conn_pool:
                     self._conn_pool.close()
                     self._closed = True
@@ -339,7 +339,7 @@ class PostgresqlDatabase(AsyncPostgresqlDatabase):
     @gen.coroutine
     def get_conn(self):
         if self._closed:
-            with self.exception_wrapper():
+            with self.exception_wrapper:
                 self._conn_pool = self._connect(self.database, **self.connect_kwargs)
                 self._closed = False
                 self.initialize_connection(self._conn_pool)
@@ -349,7 +349,7 @@ class PostgresqlDatabase(AsyncPostgresqlDatabase):
 
     @gen.coroutine
     def execute_sql(self, sql, params=None, require_commit=True):
-        with self.exception_wrapper():
+        with self.exception_wrapper:
             conn = yield self.get_conn()
             try:
                 cursor = yield conn.execute(sql, params or ())

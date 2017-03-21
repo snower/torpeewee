@@ -11,7 +11,7 @@ setup(
     packages=['torpeewee'],
     install_requires=[
         'tornado>=4.1',
-        'peewee>=2.8.1'
+        'peewee==2.9.1'
     ],
     author=['snower'],
     author_email=['sujian199@gmail.com'],

@@ -8,6 +8,9 @@ from tornado.util import raise_exc_info
 from tornado import gen
 
 class Transaction(object):
+    def __init__(self):
+        self.database = None
+
     def _connect(self, database, **kwargs):
         raise NotImplementedError
 
@@ -31,7 +34,7 @@ class Transaction(object):
         if self.connection is None:
             yield self.begin()
 
-        with self.database.exception_wrapper():
+        with self.database.exception_wrapper:
             cursor = self.connection.cursor()
             yield cursor.execute(sql, params or ())
             yield cursor.close()
