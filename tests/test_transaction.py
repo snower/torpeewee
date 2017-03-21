@@ -34,3 +34,11 @@ class TestTransaction(BaseTestCase):
             assert count == 2, ""
 
         yield self.db.transaction()(self.run_transaction)()
+
+        transaction = yield self.db.transaction()
+        try:
+            yield self.run_transaction(transaction)
+        except:
+            yield transaction.rollback()
+        else:
+            yield transaction.commit()
