@@ -76,6 +76,8 @@ class Transaction(object):
             self.database._close(self.connection)
             self.connection = None
 
+    def __del__(self):
+        self.rollback()
 
 class TransactionFuture(gen.Future):
     def __init__(self, args_name):
