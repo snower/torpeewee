@@ -5,6 +5,7 @@
 from tornado import gen
 from peewee import Model as BaseModel, ModelAlias, IntegrityError
 from .query import SelectQuery, UpdateQuery, InsertQuery, DeleteQuery, RawQuery
+from .transaction import TransactionFuture
 
 class Model(BaseModel):
     @classmethod
@@ -208,6 +209,8 @@ class Using(object):
 
     def __init__(self, model_class, database):
         self.model_class = model_class
+        if isinstance(database, TransactionFuture):
+            database = database.transaction
         self.database = database
 
     def __getattr__(self, key):

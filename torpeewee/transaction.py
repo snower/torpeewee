@@ -83,6 +83,37 @@ class TransactionFuture(gen.Future):
 
         self.args_name = args_name
         self.transaction = None
+        self._transaction_begin_future = None
+
+    @gen.coroutine
+    def get_conn(self):
+        conn = yield self.transaction.get_conn()
+        raise gen.Return(conn)
+
+    @gen.coroutine
+    def get_cursor(self):
+        cursor = yield self.transaction.get_cursor()
+        raise gen.Return(cursor)
+
+    @gen.coroutine
+    def execute_sql(self, sql, params=None, require_commit=True):
+        cursor = yield self.transaction.execute_sql(sql, params, require_commit)
+        raise gen.Return(cursor)
+
+    @gen.coroutine
+    def begin(self):
+        yield self.transaction.begin()
+
+    @gen.coroutine
+    def commit(self):
+        yield self.transaction.commit()
+
+    @gen.coroutine
+    def rollback(self):
+        yield self.transaction.rollback()
+
+    def close(self):
+        self.transaction.close()
 
     def __enter__(self):
         return self.transaction.__enter__()
@@ -108,10 +139,10 @@ class TransactionFuture(gen.Future):
         return _
 
     def add_done_callback(self, fn):
-        if self._future is not None:
+        if self._transaction_begin_future is not None:
             return super(TransactionFuture, self).add_done_callback(fn)
 
-        self._future = self.transaction.begin()
+        self._transaction_begin_future = self.transaction.begin()
 
         def on_done(future):
             if future._exc_info is not None:
@@ -119,5 +150,5 @@ class TransactionFuture(gen.Future):
             else:
                 self.set_result(self)
 
-        self._future.add_done_callback(on_done)
+        self._transaction_begin_future.add_done_callback(on_done)
         super(TransactionFuture, self).add_done_callback(fn)
