@@ -14,12 +14,12 @@ services:
   - mysql
 
 env:
-  - MYSQL_POOL=20 MYSQL_HOST=127.0.0.1 MYSQL_USER=travis MYSQL_PASSWD='' MYSQL_DB=test MYSQL_CHARSET=utf8
+  - MYSQL_POOL=20 MYSQL_HOST=127.0.0.1 MYSQL_USER=root MYSQL_PASSWD='' MYSQL_DB=test MYSQL_CHARSET=utf8
 
 install: "pip install -e ."
 
 before_script:
-  - mysql -e "create database IF NOT EXISTS test;use test;CREATE TABLE IF NOT EXISTS test (id int(11) NOT NULL AUTO_INCREMENT,data varchar(64) NOT NULL,count int(11) NOT NULL DEFAULT '0',created_at datetime NOT NULL DEFAULT '0000-00-00 00:00:00',updated_at datetime NOT NULL DEFAULT '0000-00-00 00:00:00', PRIMARY KEY (id));" -utravis
+  - mysql -e "create database IF NOT EXISTS test;use test;CREATE TABLE IF NOT EXISTS test (id int(11) NOT NULL AUTO_INCREMENT,data varchar(64) NOT NULL,count int(11) NOT NULL DEFAULT '0',created_at datetime NOT NULL DEFAULT '0000-00-00 00:00:00',updated_at datetime NOT NULL DEFAULT '0000-00-00 00:00:00', PRIMARY KEY (id));" -h127.0.0.1 -uroot -p
   - pip install -r requirements.dev.txt
 
 script: ./run-tests
