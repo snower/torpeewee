@@ -19,7 +19,7 @@ env:
 install: "pip install -e ."
 
 before_script:
-  - mysql -e "create database IF NOT EXISTS test;use test;CREATE TABLE IF NOT EXISTS test (id int(11) NOT NULL AUTO_INCREMENT,data varchar(64) NOT NULL,count int(11) NOT NULL DEFAULT '0',created_at datetime NOT NULL DEFAULT '0000-00-00 00:00:00',updated_at datetime NOT NULL DEFAULT '0000-00-00 00:00:00', PRIMARY KEY (id));" -h127.0.0.1 -uroot -p
+  - mysql -e "create database IF NOT EXISTS test;use test;CREATE TABLE IF NOT EXISTS test (id int(11) NOT NULL AUTO_INCREMENT,data varchar(64) NOT NULL,count int(11) NOT NULL DEFAULT '0',created_at datetime NOT NULL DEFAULT '0000-00-00 00:00:00',updated_at datetime NOT NULL DEFAULT '0000-00-00 00:00:00', PRIMARY KEY (id));" -h127.0.0.1 -uroot
   - pip install -r requirements.dev.txt
 
 script: ./run-tests
