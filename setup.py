@@ -10,7 +10,7 @@ setup(
     version='0.0.6',
     packages=['torpeewee'],
     install_requires=[
-        'tornado>=4.1',
+        'tornado>=5.0',
         'peewee==2.9.1'
     ],
     author=['snower'],

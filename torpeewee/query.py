@@ -107,10 +107,10 @@ class SelectQuery(gen.Future, BaseSelectQuery):
         self._future = self.execute()
 
         def on_done(future):
-            if future._exc_info is not None:
-                self.set_exc_info(future.exc_info())
-            else:
+            try:
                 self.set_result(future.result())
+            except Exception as e:
+                self.set_exception(e)
 
         self._future.add_done_callback(on_done)
         super(SelectQuery, self).add_done_callback(fn)
@@ -174,10 +174,10 @@ class UpdateQuery(gen.Future, BaseUpdateQuery):
         self._future = self.execute()
 
         def on_done(future):
-            if future._exc_info is not None:
-                self.set_exc_info(future.exc_info())
-            else:
+            try:
                 self.set_result(future.result())
+            except Exception as e:
+                self.set_exception(e)
 
         self._future.add_done_callback(on_done)
         super(UpdateQuery, self).add_done_callback(fn)
@@ -273,10 +273,10 @@ class InsertQuery(gen.Future, BaseInsertQuery):
         self._future = self.execute()
 
         def on_done(future):
-            if future._exc_info is not None:
-                self.set_exc_info(future.exc_info())
-            else:
+            try:
                 self.set_result(future.result())
+            except Exception as e:
+                self.set_exception(e)
 
         self._future.add_done_callback(on_done)
         super(InsertQuery, self).add_done_callback(fn)
@@ -330,10 +330,10 @@ class DeleteQuery(gen.Future, BaseDeleteQuery):
         self._future = self.execute()
 
         def on_done(future):
-            if future._exc_info is not None:
-                self.set_exc_info(future.exc_info())
-            else:
+            try:
                 self.set_result(future.result())
+            except Exception as e:
+                self.set_exception(e)
 
         self._future.add_done_callback(on_done)
         super(DeleteQuery, self).add_done_callback(fn)
@@ -381,10 +381,10 @@ class RawQuery(gen.Future, BaseRawQuery):
         self._future = self.execute()
 
         def on_done(future):
-            if future._exc_info is not None:
-                self.set_exc_info(future.exc_info())
-            else:
+            try:
                 self.set_result(future.result())
+            except Exception as e:
+                self.set_exception(e)
 
         self._future.add_done_callback(on_done)
         super(RawQuery, self).add_done_callback(fn)

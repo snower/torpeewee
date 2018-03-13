@@ -150,10 +150,12 @@ class TransactionFuture(gen.Future):
         self._transaction_begin_future = self.transaction.begin()
 
         def on_done(future):
-            if future._exc_info is not None:
-                self.set_exc_info(future.exc_info())
+            try:
+                future.result()
+            except Exception as e:
+                self.set_exception(e)
             else:
-                self.set_result(self)
+                self.set_result(self.transaction)
 
         self._transaction_begin_future.add_done_callback(on_done)
         super(TransactionFuture, self).add_done_callback(fn)
