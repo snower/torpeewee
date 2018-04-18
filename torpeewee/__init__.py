@@ -29,7 +29,7 @@ from .model import Model, Using
 from .mysql import MySQLDatabase
 from .postgresql import PostgresqlDatabase
 from .transaction import Transaction
-from .query import SelectQuery, InsertQuery, UpdateQuery, DeleteQuery, RawQuery
+from .query import ModelSelect, NoopModelSelect, ModelUpdate, ModelInsert, ModelDelete, ModelRaw
 
-version = "0.0.6"
-version_info = (0, 0, 6)
+version = "0.0.7"
+version_info = (0, 0, 7)

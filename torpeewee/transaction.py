@@ -6,6 +6,7 @@ import sys
 from functools import wraps
 from tornado.util import raise_exc_info
 from tornado import gen
+from peewee import SENTINEL
 
 class Transaction(object):
     def __init__(self):
@@ -15,7 +16,7 @@ class Transaction(object):
         raise NotImplementedError
 
     @gen.coroutine
-    def get_conn(self):
+    def connection(self):
         if self.connection is None:
             yield self.begin()
 
@@ -30,19 +31,18 @@ class Transaction(object):
         raise gen.Return(cursor)
 
     @gen.coroutine
-    def execute_sql(self, sql, params=None, require_commit=True):
+    def execute_sql(self, sql, params=None, commit=SENTINEL):
         if self.connection is None:
             yield self.begin()
 
-        with self.database.exception_wrapper:
-            cursor = self.connection.cursor()
-            yield cursor.execute(sql, params or ())
-            yield cursor.close()
+        cursor = self.connection.cursor()
+        yield cursor.execute(sql, params or ())
+        yield cursor.close()
         raise gen.Return(cursor)
 
     @gen.coroutine
     def begin(self):
-        self.connection = yield self.database.get_conn()
+        self.connection = yield self.database.connection()
         yield self.connection.begin()
 
     @gen.coroutine
@@ -91,8 +91,8 @@ class TransactionFuture(gen.Future):
         self._transaction_begin_future = None
 
     @gen.coroutine
-    def get_conn(self):
-        conn = yield self.transaction.get_conn()
+    def connection(self):
+        conn = yield self.transaction.connection()
         raise gen.Return(conn)
 
     @gen.coroutine
@@ -101,8 +101,8 @@ class TransactionFuture(gen.Future):
         raise gen.Return(cursor)
 
     @gen.coroutine
-    def execute_sql(self, sql, params=None, require_commit=True):
-        cursor = yield self.transaction.execute_sql(sql, params, require_commit)
+    def execute_sql(self, sql, params=None, commit=SENTINEL):
+        cursor = yield self.transaction.execute_sql(sql, params, commit)
         raise gen.Return(cursor)
 
     @gen.coroutine
@@ -158,4 +158,4 @@ class TransactionFuture(gen.Future):
                 self.set_result(self.transaction)
 
         self._transaction_begin_future.add_done_callback(on_done)
-        super(TransactionFuture, self).add_done_callback(fn)
+        gen.Future.add_done_callback(self, fn)

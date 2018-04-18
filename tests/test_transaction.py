@@ -5,9 +5,10 @@
 import datetime
 from tornado import gen
 from tornado.testing import gen_test
-from . import BaseTestCase, Test
+from . import BaseTestCase
+from .model import Test
 
-class TestTransaction(BaseTestCase):
+class TestTestCaseTransaction(BaseTestCase):
     @gen.coroutine
     def run_transaction(self, transaction):
         yield Test.use(transaction).create(data="test", created_at=datetime.datetime.now(),

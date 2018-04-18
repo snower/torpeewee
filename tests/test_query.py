@@ -4,9 +4,10 @@
 
 import datetime
 from tornado.testing import gen_test
-from . import BaseTestCase, Test
+from . import BaseTestCase
+from .model import Test
 
-class TestQuery(BaseTestCase):
+class TestQueryTestCase(BaseTestCase):
     @gen_test
     def test(self):
         yield Test.delete()

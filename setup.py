@@ -7,11 +7,11 @@ from setuptools import setup
 
 setup(
     name='torpeewee',
-    version='0.0.6',
+    version='0.0.7',
     packages=['torpeewee'],
     install_requires=[
         'tornado>=5.0',
-        'peewee==2.9.1'
+        'peewee>=3.2.2'
     ],
     author=['snower'],
     author_email=['sujian199@gmail.com'],

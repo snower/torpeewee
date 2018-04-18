@@ -2,169 +2,118 @@
 # 16/6/29
 # create by: snower
 
+import sys
 from tornado import gen
-from peewee import Model as BaseModel, ModelAlias, IntegrityError
-from .query import SelectQuery, UpdateQuery, InsertQuery, DeleteQuery, RawQuery
+from peewee import Model as BaseModel, ModelAlias, IntegrityError, DoesNotExist, __deprecated__
+from .query import ModelSelect, NoopModelSelect, ModelUpdate, ModelInsert, ModelDelete, ModelRaw
 from .transaction import TransactionFuture
 
+if sys.version_info[0] == 3:
+    basestring = str
+
 class Model(BaseModel):
+    def __init__(self, *args, **kwargs):
+        super(Model, self).__init__(*args, **kwargs)
+
+        self._use_database = None
+
+        def _(using):
+            self._use_database = using
+            return self
+
+        self.use = _
+
     @classmethod
-    def select(cls, *selection):
-        query = SelectQuery(cls, *selection)
-        if cls._meta.order_by:
-            query = query.order_by(*cls._meta.order_by)
-        return query
+    def select(cls, *fields):
+        is_default = not fields
+        if not fields:
+            fields = cls._meta.sorted_fields
+        return ModelSelect(cls, fields, is_default=is_default)
 
     @classmethod
     def update(cls, __data=None, **update):
-        fdict = __data or {}
-        fdict.update([(cls._meta.fields[f], update[f]) for f in update])
-        return UpdateQuery(cls, fdict)
+        return ModelUpdate(cls, cls._normalize_data(__data, update))
 
     @classmethod
     def insert(cls, __data=None, **insert):
-        fdict = __data or {}
-        fdict.update([(cls._meta.fields[f], insert[f]) for f in insert])
-        return InsertQuery(cls, fdict)
+        return ModelInsert(cls, cls._normalize_data(__data, insert))
 
     @classmethod
-    def insert_many(cls, rows, validate_fields=True):
-        return InsertQuery(cls, rows=rows, validate_fields=True)
+    def insert_many(cls, rows, fields=None):
+        return ModelInsert(cls, insert=rows, columns=fields)
 
     @classmethod
-    def insert_from(cls, fields, query):
-        return InsertQuery(cls, fields=fields, query=query)
-
-    @classmethod
-    def delete(cls):
-        return DeleteQuery(cls)
+    def insert_from(cls, query, fields):
+        columns = [getattr(cls, field) if isinstance(field, basestring)
+                   else field for field in fields]
+        return ModelInsert(cls, insert=query, columns=columns)
 
     @classmethod
     def raw(cls, sql, *params):
-        return RawQuery(cls, sql, *params)
+        return ModelRaw(cls, sql, params)
 
     @classmethod
-    def use(cls, database):
-        return Using(cls, database)
+    def delete(cls):
+        return ModelDelete(cls)
 
     @classmethod
     @gen.coroutine
     def create(cls, **query):
         inst = cls(**query)
-        yield inst.save(force_insert=True)
-        inst._prepare_instance()
+        yield inst.save(force_insert=True, using = cls._meta.database)
         raise gen.Return(inst)
 
     @classmethod
+    def noop(cls):
+        return NoopModelSelect(cls, ())
+
+    @classmethod
     @gen.coroutine
-    def get(cls, *query, **kwargs):
-        sq = cls.select().naive()
-        if query:
-            sq = sq.where(*query)
-        if kwargs:
-            sq = sq.filter(**kwargs)
-        result = yield sq.get()
+    def get_or_none(cls, *query, **filters):
+        try:
+            result = yield cls.get(*query, **filters)
+        except DoesNotExist:
+            result = None
         raise gen.Return(result)
 
     @classmethod
     @gen.coroutine
     def get_or_create(cls, **kwargs):
+        database = cls._meta.database
         defaults = kwargs.pop('defaults', {})
         query = cls.select()
         for field, value in kwargs.items():
-            if '__' in field:
-                query = query.filter(**{field: value})
-            else:
-                query = query.where(getattr(cls, field) == value)
+            query = query.where(getattr(cls, field) == value)
 
         try:
-            result = (yield query.get()), False
+            result = yield query.get(), False
         except cls.DoesNotExist:
             try:
-                params = dict((k, v) for k, v in kwargs.items()
-                              if '__' not in k)
-                params.update(defaults)
-                result = (yield cls.create(**params)), True
+                if defaults:
+                    kwargs.update(defaults)
+                with cls._meta.database.atomic():
+                    result = yield cls.use(database).create(**kwargs), True
             except IntegrityError as exc:
                 try:
-                    result = (yield query.get()), False
+                    result = yield query.get(), False
                 except cls.DoesNotExist:
                     raise exc
         raise gen.Return(result)
 
-    @classmethod
     @gen.coroutine
-    def create_or_get(cls, **kwargs):
-        try:
-            result = (yield cls.create(**kwargs)), True
-        except IntegrityError:
-            query = []  # TODO: multi-column unique constraints.
-            for field_name, value in kwargs.items():
-                field = getattr(cls, field_name)
-                if field.unique or field.primary_key:
-                    query.append(field == value)
-            result = (yield cls.get(*query)), False
-        raise gen.Return(result)
+    def save(self, force_insert=False, only=None, using = None):
+        use_database = using or self._use_database
 
-    @classmethod
-    @gen.coroutine
-    def table_exists(cls):
-        kwargs = {}
-        if cls._meta.schema:
-            kwargs['schema'] = cls._meta.schema
-        tables = yield cls._meta.database.get_tables(**kwargs)
-        raise gen.Return(cls._meta.db_table in tables)
-
-    @classmethod
-    @gen.coroutine
-    def create_table(cls, fail_silently=False):
-        if fail_silently and (yield cls.table_exists()):
-            return
-
-        db = cls._meta.database
-        pk = cls._meta.primary_key
-        if db.sequences and pk is not False and pk.sequence:
-            if not (yield db.sequence_exists(pk.sequence)):
-                yield db.create_sequence(pk.sequence)
-
-        yield db.create_table(cls)
-        yield cls._create_indexes()
-
-    @classmethod
-    @gen.coroutine
-    def _create_indexes(cls):
-        db = cls._meta.database
-        for field in cls._fields_to_index():
-            yield db.create_index(cls, [field], field.unique)
-
-        if cls._meta.indexes:
-            for fields, unique in cls._meta.indexes:
-                yield db.create_index(cls, fields, unique)
-
-    @classmethod
-    @gen.coroutine
-    def drop_table(cls, fail_silently=False, cascade=False):
-        yield cls._meta.database.drop_table(cls, fail_silently, cascade)
-
-    @classmethod
-    @gen.coroutine
-    def truncate_table(cls, restart_identity=False, cascade=False):
-        yield cls._meta.database.truncate_table(cls, restart_identity, cascade)
-
-    @gen.coroutine
-    def save(self, force_insert=False, only=None):
-        field_dict = dict(self._data)
+        field_dict = self.__data__.copy()
         if self._meta.primary_key is not False:
             pk_field = self._meta.primary_key
-            pk_value = self._get_pk_value()
+            pk_value = self._pk
         else:
             pk_field = pk_value = None
         if only:
             field_dict = self._prune_fields(field_dict, only)
         elif self._meta.only_save_dirty and not force_insert:
-            field_dict = self._prune_fields(
-                field_dict,
-                self.dirty_fields)
+            field_dict = self._prune_fields(field_dict, self.dirty_fields)
             if not field_dict:
                 self._dirty.clear()
                 raise gen.Return(False)
@@ -176,31 +125,123 @@ class Model(BaseModel):
                     field_dict.pop(pk_part_name, None)
             else:
                 field_dict.pop(pk_field.name, None)
-            rows = yield self.update(**field_dict).where(self._pk_expr()).execute()
-        elif pk_field is None:
-            yield self.insert(**field_dict).execute()
+            if use_database:
+                rows = yield self.__class__.use(self._use_database).update(**field_dict).where(self._pk_expr()).execute()
+            else:
+                rows = yield self.update(**field_dict).where(self._pk_expr()).execute()
+        elif pk_field is None or not self._meta.auto_increment:
+            if use_database:
+                yield self.__class__.use(self._use_database).insert(**field_dict).execute()
+            else:
+                yield self.insert(**field_dict).execute()
             rows = 1
         else:
-            pk_from_cursor = yield self.insert(**field_dict).execute()
+            if use_database:
+                pk_from_cursor = yield self.__class__.use(self._use_database).insert(**field_dict).execute()
+            else:
+                pk_from_cursor = yield self.insert(**field_dict).execute()
             if pk_from_cursor is not None:
                 pk_value = pk_from_cursor
-            self._set_pk_value(pk_value)
+            self._pk = pk_value
             rows = 1
         self._dirty.clear()
         raise gen.Return(rows)
 
-    @gen.coroutine
-    def delete_instance(self, recursive=False, delete_nullable=False):
-        if recursive:
-            dependencies = self.dependencies(delete_nullable)
-            for query, fk in reversed(list(dependencies)):
-                model = fk.model_class
-                if fk.null and not delete_nullable:
-                    yield model.update(**{fk.name: None}).where(query).execute()
+    def dependencies(self, search_nullable=False, using = None):
+        def _generator():
+            data = yield None
+            while data:
+                if isinstance(data, Exception):
+                    raise data
+                data = yield data
+            raise StopIteration()
+
+        @gen.coroutine
+        def _(self, search_nullable, using, generator):
+            try:
+                use_database = using or self._use_database
+
+                model_class = type(self)
+                if use_database:
+                    query = yield self.__class__.use(use_database).select(self._meta.primary_key).where(self._pk_expr())
                 else:
-                    yield model.delete().where(query).execute()
-        result = yield self.delete().where(self._pk_expr()).execute()
-        raise gen.Return(result)
+                    query = yield self.select(self._meta.primary_key).where(self._pk_expr())
+                stack = [(type(self), query)]
+                seen = set()
+
+                while stack:
+                    klass, query = stack.pop()
+                    if klass in seen:
+                        continue
+                    seen.add(klass)
+                    for fk, rel_model in klass._meta.backrefs.items():
+                        if rel_model is model_class:
+                            node = (fk == self.__data__[fk.rel_field.name])
+                        else:
+                            node = fk << query
+                        if use_database:
+                            subquery = (yield rel_model.use(use_database).select(rel_model._meta.primary_key)
+                                        .where(node))
+                        else:
+                            subquery = (yield rel_model.select(rel_model._meta.primary_key)
+                                        .where(node))
+                        if not fk.null or search_nullable:
+                            stack.append((rel_model, subquery))
+                        generator.send((node, fk))
+
+                generator.send(None)
+            except Exception as e:
+                generator.send(e)
+
+        generator = next(_generator())
+        _(self, search_nullable, using, generator)
+        return generator
+
+    @gen.coroutine
+    def delete_instance(self, recursive=False, delete_nullable=False, using = None):
+        use_database = using or self._use_database
+        if recursive:
+            dependencies = self.dependencies(delete_nullable, using=using)
+            for query, fk in reversed(list(dependencies)):
+                model = fk.model
+                if fk.null and not delete_nullable:
+                    if use_database:
+                        yield model.use(use_database).update(**{fk.name: None}).where(query).execute()
+                    else:
+                        yield model.update(**{fk.name: None}).where(query).execute()
+                else:
+                    if use_database:
+                        yield model.use(use_database).delete().where(query).execute()
+                    else:
+                        yield model.delete().where(query).execute()
+        if use_database:
+            raise gen.Return((yield self.__class__.use(use_database).delete().where(self._pk_expr()).execute()))
+        raise gen.Return((yield self.delete().where(self._pk_expr()).execute()))
+
+    @classmethod
+    @gen.coroutine
+    def create_table(cls, safe=True, **options):
+        if 'fail_silently' in options:
+            __deprecated__('"fail_silently" has been deprecated in favor of '
+                           '"safe" for the create_table() method.')
+            safe = options.pop('fail_silently')
+
+        if safe and not cls._meta.database.safe_create_index \
+                and (yield cls.table_exists()):
+            raise gen.Return(None)
+        yield cls._schema.create_all(safe, **options)
+
+    @classmethod
+    @gen.coroutine
+    def drop_table(cls, safe=True, drop_sequences=True, **options):
+        if safe and not cls._meta.database.safe_drop_index \
+                and not (yield cls.table_exists()):
+            raise gen.Return(None)
+        yield cls._schema.drop_all(safe, drop_sequences, **options)
+
+    @classmethod
+    def use(cls, database):
+        return Using(cls, database)
 
 
 class Using(object):

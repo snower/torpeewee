@@ -2,24 +2,16 @@
 # 16/7/11
 # create by: snower
 
-import os
+import datetime
 from tornado.testing import gen_test
-from torpeewee import *
 from . import BaseTestCase
+from .model import TestTableModel
 
-class TestTableModel(Model):
-    id = IntegerField(primary_key=True)
-    data = CharField(max_length=64, null=False)
-    count = IntegerField(default=0)
-    created_at = DateTimeField()
-    updated_at = DateTimeField()
-
-class TestTable(BaseTestCase):
-    def setUp(self):
-        super(TestTable, self).setUp()
-        TestTableModel._meta.database = self.db
-
+class TestTableTestCase(BaseTestCase):
     @gen_test
     def test(self):
         yield TestTableModel.create_table()
+        yield TestTableModel.create(data = 'a', count = 1, created_at=datetime.datetime.now(), updated_at=datetime.datetime.now())
+        count = yield TestTableModel.select().count()
+        assert count == 1
         yield TestTableModel.drop_table()
