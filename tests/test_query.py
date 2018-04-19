@@ -36,10 +36,18 @@ class TestQueryTestCase(BaseTestCase):
         t = yield Test.select().order_by(Test.id.desc()).first()
         t.data = "aaa"
         yield t.save()
+        t = yield Test.select().order_by(Test.id.desc()).first()
+        assert  t.data == 'aaa'
 
         t = yield Test.select().order_by(Test.id.desc()).first()
         yield t.delete_instance()
+        t = yield Test.select().where(Test.id == t.id).first()
+        assert t is None
 
         yield Test.update(data = '12345')
         t = yield Test.select().order_by(Test.id.desc()).first()
         assert t.data == '12345', ''
+
+        yield Test.delete()
+        c = yield Test.select().count()
+        assert c == 0, ''

@@ -6,7 +6,7 @@ import datetime
 from tornado import gen
 from tornado.testing import gen_test
 from . import BaseTestCase
-from .model import Test
+from .model import Test, db
 
 class TestTestCaseTransaction(BaseTestCase):
     @gen.coroutine
@@ -22,10 +22,9 @@ class TestTestCaseTransaction(BaseTestCase):
     @gen_test
     def test(self):
         yield Test.delete()
-        yield Test.create(data="test", created_at=datetime.datetime.now(),
-                                                updated_at=datetime.datetime.now())
+        yield Test.create(data="test", created_at=datetime.datetime.now(), updated_at=datetime.datetime.now())
 
-        with (yield self.db.transaction()) as transaction:
+        with (yield db.transaction()) as transaction:
             yield Test.use(transaction).create(data="test", created_at=datetime.datetime.now(),
                                                    updated_at=datetime.datetime.now())
 
@@ -34,12 +33,52 @@ class TestTestCaseTransaction(BaseTestCase):
             count = yield Test.use(transaction).select().count()
             assert count == 2, ""
 
-        yield self.db.transaction()(self.run_transaction)()
+            t = yield Test.use(transaction).select().order_by(Test.id.desc()).first()
+            td = t.data
+            t.data = "222"
+            yield t.use(transaction).save()
 
-        transaction = yield self.db.transaction()
+            t = yield Test.use(transaction).select().order_by(Test.id.desc()).first()
+            assert t.data == '222'
+
+            t = yield Test.select().order_by(Test.id.desc()).first()
+            assert t.data == td
+
+        yield db.transaction()(self.run_transaction)()
+
+        transaction = yield db.transaction()
         try:
             yield self.run_transaction(transaction)
         except:
             yield transaction.rollback()
         else:
             yield transaction.commit()
+
+        with (yield db.transaction()) as transaction:
+            t = yield Test.use(transaction).select().order_by(Test.id.desc()).first()
+            t.data = "aaa"
+            yield t.use(transaction).save()
+
+        t = yield Test.select().order_by(Test.id.desc()).first()
+        assert t.data == 'aaa'
+
+        with (yield db.transaction()) as transaction:
+            t = yield Test.use(transaction).select().order_by(Test.id.desc()).first()
+            yield t.use(transaction).delete_instance()
+
+        t = yield Test.select().where(Test.id == t.id).first()
+        assert t is None
+
+        with (yield db.transaction()) as transaction:
+            yield Test.use(transaction).update(data='12345')
+
+        t = yield Test.select().order_by(Test.id.desc()).first()
+        assert t.data == '12345', ''
+
+        with (yield db.transaction()) as transaction:
+            yield Test.use(transaction).delete()
+
+        c = yield Test.select().count()
+        assert c == 0, ''
+
+        yield Test.delete()

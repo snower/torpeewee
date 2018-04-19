@@ -34,7 +34,7 @@ class AsyncMySQLDatabase(BaseMySQLDatabase):
         raise NotImplementedError
 
     def transaction_depth(self):
-        raise NotImplementedError
+        return 0
 
     def top_transaction(self):
         raise NotImplementedError
@@ -204,11 +204,11 @@ class MySQLDatabase(AsyncMySQLDatabase):
             yield cursor.execute(sql, params or ())
             yield cursor.close()
         except Exception:
-            if self.autorollback and self.autocommit:
+            if self.autorollback and not conn._connection.autocommit_mode:
                 yield conn.rollback()
             raise
         else:
-            if commit and self.autocommit:
+            if commit and not conn._connection.autocommit_mode:
                 yield conn.commit()
         finally:
             self._close(conn)

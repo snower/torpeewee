@@ -11,7 +11,7 @@ class TestTableTestCase(BaseTestCase):
     @gen_test
     def test(self):
         yield TestTableModel.create_table()
-        yield TestTableModel.create(data = 'a', count = 1, created_at=datetime.datetime.now(), updated_at=datetime.datetime.now())
+        yield TestTableModel.create(id = 1, data = 'a', count = 1, created_at=datetime.datetime.now(), updated_at=datetime.datetime.now())
         count = yield TestTableModel.select().count()
         assert count == 1
         yield TestTableModel.drop_table()

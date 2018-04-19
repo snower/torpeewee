@@ -4,14 +4,78 @@
 
 import sys
 from tornado import gen
-from peewee import Model as BaseModel, ModelAlias, IntegrityError, DoesNotExist, __deprecated__
+from peewee import Model as BaseModel, SchemaManager as BaseSchemaManager, ModelAlias, BaseQuery, IntegrityError, DoesNotExist, __deprecated__
 from .query import ModelSelect, NoopModelSelect, ModelUpdate, ModelInsert, ModelDelete, ModelRaw
 from .transaction import TransactionFuture
 
 if sys.version_info[0] == 3:
     basestring = str
 
+class SchemaManager(BaseSchemaManager):
+    @gen.coroutine
+    def create_table(self, safe=True, **options):
+        yield self.database.execute(self._create_table(safe=safe, **options))
+
+    @gen.coroutine
+    def drop_table(self, safe=True, **options):
+        yield self.database.execute(self._drop_table(safe=safe, **options))
+
+    @gen.coroutine
+    def create_indexes(self, safe=True):
+        for query in self._create_indexes(safe=safe):
+            yield self.database.execute(query)
+
+    @gen.coroutine
+    def drop_indexes(self, safe=True):
+        for query in self._drop_indexes(safe=safe):
+            yield self.database.execute(query)
+
+    @gen.coroutine
+    def create_sequence(self, field):
+        seq_ctx = self._create_sequence(field)
+        if seq_ctx is not None:
+            yield self.database.execute(seq_ctx)
+
+    @gen.coroutine
+    def drop_sequence(self, field):
+        seq_ctx = self._drop_sequence(field)
+        if seq_ctx is not None:
+            yield self.database.execute(seq_ctx)
+
+    @gen.coroutine
+    def create_foreign_key(self, field):
+        yield self.database.execute(self._create_foreign_key(field))
+
+    @gen.coroutine
+    def create_sequences(self):
+        if self.database.sequences:
+            for field in self.model._meta.sorted_fields:
+                if field.sequence:
+                    yield self.create_sequence(field)
+
+    @gen.coroutine
+    def create_all(self, safe=True, **table_options):
+        yield self.create_sequences()
+        yield self.create_table(safe, **table_options)
+        yield self.create_indexes(safe=safe)
+
+    @gen.coroutine
+    def drop_sequences(self):
+        if self.database.sequences:
+            for field in self.model._meta.sorted_fields:
+                if field.sequence:
+                    yield self.drop_sequence(field)
+
+    @gen.coroutine
+    def drop_all(self, safe=True, drop_sequences=True, **options):
+        yield self.drop_table(safe, **options)
+        if drop_sequences:
+            yield self.drop_sequences()
+
 class Model(BaseModel):
+    class Meta:
+        schema_manager_class = SchemaManager
+
     def __init__(self, *args, **kwargs):
         super(Model, self).__init__(*args, **kwargs)
 
@@ -60,7 +124,7 @@ class Model(BaseModel):
     @gen.coroutine
     def create(cls, **query):
         inst = cls(**query)
-        yield inst.save(force_insert=True, using = cls._meta.database)
+        yield inst.save(force_insert=True)
         raise gen.Return(inst)
 
     @classmethod
@@ -79,7 +143,6 @@ class Model(BaseModel):
     @classmethod
     @gen.coroutine
     def get_or_create(cls, **kwargs):
-        database = cls._meta.database
         defaults = kwargs.pop('defaults', {})
         query = cls.select()
         for field, value in kwargs.items():
@@ -92,7 +155,7 @@ class Model(BaseModel):
                 if defaults:
                     kwargs.update(defaults)
                 with cls._meta.database.atomic():
-                    result = yield cls.use(database).create(**kwargs), True
+                    result = yield cls.create(**kwargs), True
             except IntegrityError as exc:
                 try:
                     result = yield query.get(), False
@@ -126,18 +189,18 @@ class Model(BaseModel):
             else:
                 field_dict.pop(pk_field.name, None)
             if use_database:
-                rows = yield self.__class__.use(self._use_database).update(**field_dict).where(self._pk_expr()).execute()
+                rows = yield self.__class__.use(use_database).update(**field_dict).where(self._pk_expr()).execute()
             else:
                 rows = yield self.update(**field_dict).where(self._pk_expr()).execute()
         elif pk_field is None or not self._meta.auto_increment:
             if use_database:
-                yield self.__class__.use(self._use_database).insert(**field_dict).execute()
+                yield self.__class__.use(use_database).insert(**field_dict).execute()
             else:
                 yield self.insert(**field_dict).execute()
             rows = 1
         else:
             if use_database:
-                pk_from_cursor = yield self.__class__.use(self._use_database).insert(**field_dict).execute()
+                pk_from_cursor = yield self.__class__.use(use_database).insert(**field_dict).execute()
             else:
                 pk_from_cursor = yield self.insert(**field_dict).execute()
             if pk_from_cursor is not None:
@@ -256,22 +319,47 @@ class Using(object):
 
     def __getattr__(self, key):
         attr = getattr(self.model_class, key)
-        if not callable(attr):
-            return attr
-
-        def attr_proxy(*args, **kwargs):
-            ori_database = self.model_class._meta.database
-            self.model_class._meta.database = self.database
-            try:
-                return attr(*args, **kwargs)
-            finally:
-                self.model_class._meta.database = ori_database
-        return attr_proxy
+        if callable(attr):
+            def inner(*args, **kwargs):
+                result = attr(*args, **kwargs)
+                if isinstance(result, BaseQuery):
+                    result.bind(self.database)
+                return result
+            setattr(self, key, attr)
+            return inner
+        return attr
 
     def __setattr__(self, key, value):
         if self.model_class and self.database:
             return setattr(self.model_class, key, value)
         return super(Using, self).__setattr__(key, value)
+
+    @gen.coroutine
+    def create(self, **query):
+        inst = self.model_class(**query)
+        yield inst.save(force_insert=True, using=self.database)
+        raise gen.Return(inst)
+
+    @gen.coroutine
+    def get_or_create(self, **kwargs):
+        defaults = kwargs.pop('defaults', {})
+        query = self.model_class.select().bind(self.database)
+        for field, value in kwargs.items():
+            query = query.where(getattr(self.model_class, field) == value)
+
+        try:
+            result = yield query.get(), False
+        except self.model_class.DoesNotExist:
+            try:
+                if defaults:
+                    kwargs.update(defaults)
+                result = yield self.create(**kwargs), True
+            except IntegrityError as exc:
+                try:
+                    result = yield query.get(), False
+                except self.model_class.DoesNotExist:
+                    raise exc
+        raise gen.Return(result)
 
     def alias(self):
         model_alias = ModelAlias(self.model_class)

@@ -45,7 +45,7 @@ class AsyncPostgresqlDatabase(BasePostgresqlDatabase):
         raise NotImplementedError
 
     def transaction_depth(self):
-        raise NotImplementedError
+        return 0
 
     def top_transaction(self):
         raise NotImplementedError
