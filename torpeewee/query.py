@@ -8,10 +8,6 @@ from peewee import ModelSelect as BaseModelSelect, NoopModelSelect as BaseNoopMo
     ModelInsert as BaseModelInsert, ModelDelete as BaseModelDelete, ModelRaw as BaseModelRaw
 
 
-class QueryIsDoneError(Exception):
-    pass
-
-
 class QueryFuture(gen.Future):
     _query_future = None
     _query_class = None
@@ -47,15 +43,15 @@ class QueryFuture(gen.Future):
 
     def add_done_callback(self, fn):
         if self._query_future is not None:
-            raise QueryIsDoneError()
+            return super(QueryFuture, self).add_done_callback(fn)
 
         self._query_future = self._query.execute()
 
         def on_done(future):
             try:
                 self.set_result(future.result())
-            except Exception as e:
-                self.set_exception(e)
+            except:
+                self.set_exception(future.exception())
 
         self._query_future.add_done_callback(on_done)
         return super(QueryFuture, self).add_done_callback(fn)

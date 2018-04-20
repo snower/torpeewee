@@ -219,13 +219,12 @@ class PostgresqlDatabase(AsyncPostgresqlDatabase):
     def _connect(self):
         pool_kwargs = {}
         conn_kwargs = {"dbname": self.database}
+        conn_kwargs.update(self.connect_params)
 
         for key in ['connection_factory', 'cursor_factory', 'size', 'max_size', 'ioloop', 'raise_connect_errors',
                     'reconnect_interval','setsession', 'auto_shrink', 'shrink_delay', 'shrink_period']:
-            if key in self.connect_params:
-                pool_kwargs[key] = self.connect_params[key]
-            else:
-                conn_kwargs[key] = self.connect_params[key]
+            if key in conn_kwargs:
+                pool_kwargs[key] = conn_kwargs.pop(key)
 
         if 'password' in conn_kwargs:
             conn_kwargs['passwd'] = conn_kwargs.pop('password')
@@ -237,10 +236,12 @@ class PostgresqlDatabase(AsyncPostgresqlDatabase):
         if "passwd" in conn_kwargs:
             conn_kwargs["password"] = conn_kwargs.pop("passwd")
         dsn = " ".join(["%s=%s" % (k, _param_escape(str(v)))
-                                for (k, v) in conn_kwargs.iteritems()])
+                                for (k, v) in conn_kwargs.items()])
 
         if "max_size" not in pool_kwargs:
             pool_kwargs["max_size"] = 32
+        if "auto_shrink" not in pool_kwargs:
+            pool_kwargs["auto_shrink"] = True
         return momoko.Pool(dsn = dsn, **pool_kwargs)
 
     def close(self):
@@ -269,6 +270,7 @@ class PostgresqlDatabase(AsyncPostgresqlDatabase):
     def connection(self):
         if self.is_closed():
             self.connect()
+            yield self._conn_pool.connect()
         conn = yield self._conn_pool.getconn(False)
         raise gen.Return(conn)
 
