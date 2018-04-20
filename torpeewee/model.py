@@ -5,7 +5,9 @@
 import sys
 from tornado import gen
 from peewee import Model as BaseModel, SchemaManager as BaseSchemaManager, ModelAlias, BaseQuery, IntegrityError, DoesNotExist, __deprecated__
-from .query import ModelSelect, NoopModelSelect, ModelUpdate, ModelInsert, ModelDelete, ModelRaw
+from .query import QueryFuture, ModelSelectFuture as ModelSelect, NoopModelSelectFuture as NoopModelSelect, \
+    ModelUpdateFuture as ModelUpdate, ModelInsertFuture as ModelInsert, \
+    ModelDeleteFuture as ModelDelete, ModelRawFuture as ModelRaw
 from .transaction import TransactionFuture
 
 if sys.version_info[0] == 3:
@@ -322,15 +324,17 @@ class Using(object):
         if callable(attr):
             def inner(*args, **kwargs):
                 result = attr(*args, **kwargs)
-                if isinstance(result, BaseQuery):
+                if isinstance(result, QueryFuture):
+                    result.bind(self.database)
+                elif isinstance(result, BaseQuery):
                     result.bind(self.database)
                 return result
-            setattr(self, key, attr)
+            super(Using, self).__setattr__(key, inner)
             return inner
         return attr
 
     def __setattr__(self, key, value):
-        if self.model_class and self.database:
+        if self.model_class is not None and not hasattr(self, key):
             return setattr(self.model_class, key, value)
         return super(Using, self).__setattr__(key, value)
 

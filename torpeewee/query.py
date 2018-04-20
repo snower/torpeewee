@@ -11,6 +11,56 @@ from peewee import ModelSelect as BaseModelSelect, NoopModelSelect as BaseNoopMo
 class QueryIsDoneError(Exception):
     pass
 
+
+class QueryFuture(gen.Future):
+    _query_future = None
+    _query_class = None
+    _query = None
+
+    def __init__(self, query_class, *args, **kwargs):
+        super(QueryFuture, self).__init__()
+
+        self._query_future = None
+        self._query_class = query_class
+        self._query = kwargs.pop("__query__") if "__query__" in kwargs else query_class(*args, **kwargs)
+
+    def __getattr__(self, item):
+        attr = getattr(self._query, item)
+        if callable(attr):
+            def inner(*args, **kwargs):
+                result = attr(*args, **kwargs)
+                if isinstance(result, gen.Future):
+                    return result
+                elif result is self._query:
+                    return self
+                elif isinstance(result, self._query_class):
+                    return self.__class__(self._query_class, __query__ = result)
+                return result
+            super(QueryFuture, self).__setattr__(item, inner)
+            return inner
+        return attr
+
+    def __setattr__(self, key, value):
+        if self._query is not None and not hasattr(self, key):
+            return setattr(self._query, key, value)
+        return super(QueryFuture, self).__setattr__(key, value)
+
+    def add_done_callback(self, fn):
+        if self._query_future is not None:
+            raise QueryIsDoneError()
+
+        self._query_future = self._query.execute()
+
+        def on_done(future):
+            try:
+                self.set_result(future.result())
+            except Exception as e:
+                self.set_exception(e)
+
+        self._query_future.add_done_callback(on_done)
+        return super(QueryFuture, self).add_done_callback(fn)
+
+
 class FutureSelect(object):
     @gen.coroutine
     def _execute(self, database):
@@ -102,16 +152,12 @@ class FutureSelect(object):
     def len(self):
         raise gen.Return(len((yield self.execute())))
 
+
 class Select(FutureSelect, BaseSelect):
     pass
 
-class ModelSelect(gen.Future, FutureSelect, BaseModelSelect):
-    def __init__(self, *args, **kwargs):
-        BaseModelSelect.__init__(self, *args, **kwargs)
-        gen.Future.__init__(self)
 
-        self._future = None
-
+class ModelSelect(FutureSelect, BaseModelSelect):
     @gen.coroutine
     def get(self):
         clone = self.paginate(1, 1)
@@ -125,29 +171,13 @@ class ModelSelect(gen.Future, FutureSelect, BaseModelSelect):
                                           (clone.model, sql, params))
         raise gen.Return(result)
 
-    def add_done_callback(self, fn):
-        if self._future is not None:
-            raise QueryIsDoneError()
 
-        self._future = self.execute()
-
-        def on_done(future):
-            try:
-                self.set_result(future.result())
-            except Exception as e:
-                self.set_exception(e)
-
-        self._future.add_done_callback(on_done)
-        gen.Future.add_done_callback(self, fn)
-
-
-class NoopModelSelect(gen.Future, FutureSelect, BaseNoopModelSelect):
+class ModelSelectFuture(QueryFuture):
     def __init__(self, *args, **kwargs):
-        BaseNoopModelSelect.__init__(self, *args, **kwargs)
-        gen.Future.__init__(self)
+        super(ModelSelectFuture, self).__init__(ModelSelect, *args, **kwargs)
 
-        self._future = None
 
+class NoopModelSelect(FutureSelect, BaseNoopModelSelect):
     @gen.coroutine
     def get(self):
         clone = self.paginate(1, 1)
@@ -161,28 +191,13 @@ class NoopModelSelect(gen.Future, FutureSelect, BaseNoopModelSelect):
                                           (clone.model, sql, params))
         raise gen.Return(result)
 
-    def add_done_callback(self, fn):
-        if self._future is not None:
-            raise QueryIsDoneError()
 
-        self._future = self.execute()
-
-        def on_done(future):
-            try:
-                self.set_result(future.result())
-            except Exception as e:
-                self.set_exception(e)
-
-        self._future.add_done_callback(on_done)
-        gen.Future.add_done_callback(self, fn)
-
-class ModelUpdate(gen.Future, BaseModelUpdate):
+class NoopModelSelectFuture(QueryFuture):
     def __init__(self, *args, **kwargs):
-        BaseModelUpdate.__init__(self, *args, **kwargs)
-        gen.Future.__init__(self)
+        super(NoopModelSelectFuture, self).__init__(NoopModelSelect, *args, **kwargs)
 
-        self._future = None
 
+class ModelUpdate(BaseModelUpdate):
     @gen.coroutine
     def _execute(self, database):
         if self._returning:
@@ -199,39 +214,19 @@ class ModelUpdate(gen.Future, BaseModelUpdate):
         raise gen.Return(self._cursor_wrapper)
 
     def __iter__(self):
-        if not self.model_class._meta.database.returning_clause:
-            raise ValueError('UPDATE queries cannot be iterated over unless '
-                             'they specify a RETURNING clause, which is not '
-                             'supported by your database.')
         raise NotImplementedError()
 
     @gen.coroutine
     def iterator(self, database=None):
         raise gen.Return(iter((yield self.execute(database)).iterator()))
 
-    def add_done_callback(self, fn):
-        if self._future is not None:
-            raise QueryIsDoneError()
 
-        self._future = self.execute()
-
-        def on_done(future):
-            try:
-                self.set_result(future.result())
-            except Exception as e:
-                self.set_exception(e)
-
-        self._future.add_done_callback(on_done)
-        gen.Future.add_done_callback(self, fn)
-
-
-class ModelInsert(gen.Future, BaseModelInsert):
+class ModelUpdateFuture(QueryFuture):
     def __init__(self, *args, **kwargs):
-        BaseModelInsert.__init__(self, *args, **kwargs)
-        gen.Future.__init__(self)
+        super(ModelUpdateFuture, self).__init__(ModelUpdate, *args, **kwargs)
 
-        self._future = None
 
+class ModelInsert(BaseModelInsert):
     @gen.coroutine
     def _execute(self, database):
         if self._returning:
@@ -251,29 +246,13 @@ class ModelInsert(gen.Future, BaseModelInsert):
     def iterator(self, database=None):
         raise gen.Return(iter((yield self.execute(database)).iterator()))
 
-    def add_done_callback(self, fn):
-        if self._future is not None:
-            raise QueryIsDoneError()
 
-        self._future = self.execute()
-
-        def on_done(future):
-            try:
-                self.set_result(future.result())
-            except Exception as e:
-                self.set_exception(e)
-
-        self._future.add_done_callback(on_done)
-        gen.Future.add_done_callback(self, fn)
-
-
-class ModelDelete(gen.Future, BaseModelDelete):
+class ModelInsertFuture(QueryFuture):
     def __init__(self, *args, **kwargs):
-        BaseModelDelete.__init__(self, *args, **kwargs)
-        gen.Future.__init__(self)
+        super(ModelInsertFuture, self).__init__(ModelInsert, *args, **kwargs)
 
-        self._future = None
 
+class ModelDelete(BaseModelDelete):
     @gen.coroutine
     def _execute(self, database):
         if self._returning:
@@ -289,50 +268,19 @@ class ModelDelete(gen.Future, BaseModelDelete):
             self._cursor_wrapper = self._get_cursor_wrapper(cursor)
         raise gen.Return(self._cursor_wrapper)
 
-    def add_done_callback(self, fn):
-        if self._future is not None:
-            raise QueryIsDoneError()
 
-        self._future = self.execute()
-
-        def on_done(future):
-            try:
-                self.set_result(future.result())
-            except Exception as e:
-                self.set_exception(e)
-
-        self._future.add_done_callback(on_done)
-        gen.Future.add_done_callback(self, fn)
-
-
-class ModelRaw(gen.Future, BaseModelRaw):
+class ModelDeleteFuture(QueryFuture):
     def __init__(self, *args, **kwargs):
-        BaseModelRaw.__init__(self, *args, **kwargs)
-        gen.Future.__init__(self)
+        super(ModelDeleteFuture, self).__init__(ModelDelete, *args, **kwargs)
 
-        self._future = None
 
+class ModelRaw(BaseModelRaw):
     @gen.coroutine
     def _execute(self, database):
         if self._cursor_wrapper is None:
             cursor = yield database.execute(self)
             self._cursor_wrapper = self._get_cursor_wrapper(cursor)
         raise gen.Return(self._cursor_wrapper)
-
-    def add_done_callback(self, fn):
-        if self._future is not None:
-            raise QueryIsDoneError()
-
-        self._future = self.execute()
-
-        def on_done(future):
-            try:
-                self.set_result(future.result())
-            except Exception as e:
-                self.set_exception(e)
-
-        self._future.add_done_callback(on_done)
-        gen.Future.add_done_callback(self, fn)
 
     def __iter__(self):
         raise NotImplementedError()
@@ -340,3 +288,8 @@ class ModelRaw(gen.Future, BaseModelRaw):
     @gen.coroutine
     def iterator(self, database=None):
         raise gen.Return(iter((yield self.execute(database)).iterator()))
+
+
+class ModelRawFuture(QueryFuture):
+    def __init__(self, *args, **kwargs):
+        super(ModelRawFuture, self).__init__(ModelRaw, *args, **kwargs)
