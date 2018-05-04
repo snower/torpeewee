@@ -31,5 +31,5 @@ from .postgresql import PostgresqlDatabase
 from .transaction import Transaction
 from .query import ModelSelect, NoopModelSelect, ModelUpdate, ModelInsert, ModelDelete, ModelRaw
 
-version = "0.0.7"
-version_info = (0, 0, 7)
+version = "1.0.1"
+version_info = (1, 0, 1)
