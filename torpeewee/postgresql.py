@@ -6,9 +6,9 @@ from peewee import PostgresqlDatabase as BasePostgresqlDatabase, IndexMetadata, 
 from .transaction import Transaction as BaseTransaction
 
 try:
-    import asyncpg
+    import aiopg
 except ImportError:
-    asyncpg = None
+    aiopg = None
 
 class AsyncPostgresqlDatabase(BasePostgresqlDatabase):
     def begin(self):
@@ -136,6 +136,43 @@ class AsyncPostgresqlDatabase(BasePostgresqlDatabase):
         for model in reversed(sort_models(models)):
             await model.drop_table(**kwargs)
 
+class Cursor(object):
+    _cursor = None
+
+    def __init__(self, cursor):
+        self._cursor = cursor
+
+    def fetchone(self):
+        ret = self._cursor._impl.fetchone()
+        assert not self._cursor._conn._isexecuting(), ("Don't support server side "
+                                               "cursors yet")
+        return ret
+
+    def fetchmany(self, size=None):
+        if size is None:
+            size = self._cursor._impl.arraysize
+        ret = self._cursor._impl.fetchmany(size)
+        assert not self._cursor._conn._isexecuting(), ("Don't support server side "
+                                               "cursors yet")
+        return ret
+
+    def fetchall(self):
+        ret = self._cursor._impl.fetchall()
+        assert not self._cursor._conn._isexecuting(), ("Don't support server side "
+                                               "cursors yet")
+        return ret
+
+    def scroll(self, value, mode="relative"):
+        ret = self._cursor._impl.scroll(value, mode)
+        assert not self._cursor._conn._isexecuting(), ("Don't support server side "
+                                               "cursors yet")
+        return ret
+
+    def close(self):
+        pass
+
+    def __getattr__(self, item):
+        return getattr(self._cursor, item)
 
 class Transaction(BaseTransaction, AsyncPostgresqlDatabase):
     def __init__(self, database, args_name):
@@ -143,31 +180,46 @@ class Transaction(BaseTransaction, AsyncPostgresqlDatabase):
         BaseTransaction.__init__(self, database, args_name)
 
         self.connection = None
-
-    async def get_cursor(self):
-        raise NotImplementedError()
+        self.cursor = None
+        self.aiopg_transaction = None
 
     async def execute_sql(self, sql, params=None, commit=SENTINEL):
         if self.connection is None:
             await self.begin()
 
-        cursor = await self.connection.execute(sql, *tuple(params or ()))
-        return cursor
+        await self.cursor.execute(sql, params or ())
+        return Cursor(self.cursor)
 
     async def begin(self):
         self.connection = await self.database.connection()
-        await self.connection.execute("BEGIN;")
+        try:
+            self.cursor = await self.connection.cursor()
+            self.aiopg_transaction = aiopg.Transaction(self.cursor, aiopg.IsolationLevel.repeatable_read)
+            await self.aiopg_transaction.begin()
+        except:
+            await self.close()
+            raise
         return self
 
     async def commit(self):
         if self.connection:
-            await self.connection.execute("COMMIT;")
+            await self.aiopg_transaction.commit()
             await self.close()
 
     async def rollback(self):
         if self.connection:
-            await self.connection.execute("ROLLBACK;")
+            await self.aiopg_transaction.rollback()
             await self.close()
+
+    async def close(self):
+        if self.connection:
+            if self.cursor:
+                self.cursor.close()
+            if self.connection:
+                await self.database._close(self.connection)
+            self.connection = None
+            self.cursor = None
+            self.aiopg_transaction = None
 
 class PostgresqlDatabase(AsyncPostgresqlDatabase):
     def __init__(self, *args, **kwargs):
@@ -183,15 +235,17 @@ class PostgresqlDatabase(AsyncPostgresqlDatabase):
 
     def _connect(self):
         conn_kwargs = {
+            "database": self.database,
         }
+
         conn_kwargs.update(self.connect_params)
         if 'passwd' in conn_kwargs:
             conn_kwargs['password'] = conn_kwargs.pop('passwd')
         if "db" in conn_kwargs:
             conn_kwargs["database"] = conn_kwargs.pop("db")
-        if "max_size" not in conn_kwargs:
-            conn_kwargs["max_size"] = 32
-        return asyncpg.create_pool(database=self.database, **conn_kwargs)
+        if "maxsize" not in conn_kwargs:
+            conn_kwargs["maxsize"] = 32
+        return aiopg.create_pool(None, **conn_kwargs)
 
     def close(self):
         with self._lock:
@@ -218,8 +272,8 @@ class PostgresqlDatabase(AsyncPostgresqlDatabase):
     async def connection(self):
         if self.is_closed():
             self.connect()
-            await self._conn_pool._async__init__()
-        conn = await self._conn_pool._acquire(None)
+            self._conn_pool = await self._conn_pool
+        conn = await self._conn_pool.acquire()
         return conn
 
     async def execute_sql(self, sql, params=None, commit=SENTINEL):
@@ -231,7 +285,8 @@ class PostgresqlDatabase(AsyncPostgresqlDatabase):
 
         conn = await self.connection()
         try:
-            cursor = await conn.execute(sql, *tuple(params or ()))
+            cursor = await conn.cursor()
+            await cursor.execute(sql, params or ())
         except Exception:
             if self.autorollback and self.autocommit:
                 await conn.execute("ROLLBACK;")
@@ -241,7 +296,7 @@ class PostgresqlDatabase(AsyncPostgresqlDatabase):
                 await conn.execute("COMMIT;")
         finally:
             await self._close(conn)
-        return cursor
+        return Cursor(cursor)
 
     async def cursor(self, commit=None):
         conn = await self.connection()
