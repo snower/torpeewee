@@ -20,7 +20,6 @@ torpeewee - Tornado asynchronous ORM by peewee.
 # create by: snower
 
 import datetime
-from tornado import gen
 from tornado.ioloop import IOLoop
 from torpeewee import *
 
@@ -40,76 +39,79 @@ class Test(BaseModel):
 ioloop = IOLoop.instance()
 
 @db.transaction()
-@gen.coroutine
-def run_transaction(transaction):
-    for i in (yield Test.use(transaction).select().order_by(Test.id.desc()).limit(2)):
-        print i.id, i.data
+async def run_transaction(transaction):
+    async for i in Test.use(transaction).select().order_by(Test.id.desc()).limit(2):
+        print(i.id, i.data)
 
-    print ""
-    t = yield Test.use(transaction).create(data="test", created_at=datetime.datetime.now(),
+    print("")
+    t = await Test.use(transaction).create(data="test", created_at=datetime.datetime.now(),
                                            updated_at=datetime.datetime.now())
-    print t.id, t.data
+    print(t.id, t.data)
 
-    for i in (yield Test.select().order_by(Test.id.desc()).limit(2)):
-        print i.id, i.data
+    async for i in Test.select().order_by(Test.id.desc()).limit(2):
+        print(i.id, i.data)
 
-    print ""
-    for i in (yield Test.use(transaction).select().order_by(Test.id.desc()).limit(2)):
-        print i.id, i.data
+    print("")
+    for i in (await Test.use(transaction).select().order_by(Test.id.desc()).limit(2)):
+        print(i.id, i.data)
 
-@gen.coroutine
-def run():
-    t = yield Test.select().where(Test.id == 5).first()
-    print t
+async def run():
+    t = await Test.select().where(Test.id == 5).first()
+    print(t)
 
-    c = yield Test.select().where(Test.id > 5).count()
-    print c
+    c = await Test.select().where(Test.id > 5).count()
+    print(c)
 
-    c = yield Test.select().where(Test.id > 5).group_by(Test.data).count()
-    print c
+    c = await Test.select().where(Test.id > 5).group_by(Test.data).count()
+    print(c)
 
-    for i in (yield Test.select().where(Test.id > 5).where(Test.id<=10)):
-        print i.id, i.data
+    for i in (await Test.select().where(Test.id > 5).where(Test.id<=10)):
+        print(i.id, i.data)
 
-    for i in (yield Test.select().order_by(Test.id.desc()).limit(2)):
-        print i.id, i.data
-    t = yield Test.create(data = "test", created_at=datetime.datetime.now(), updated_at=datetime.datetime.now())
-    print t.id, t.data
-    for i in (yield Test.select().order_by(Test.id.desc()).limit(2)):
-        print i.id, i.data
+    async for i in Test.select().order_by(Test.id.desc()).limit(2):
+        print(i.id, i.data)
+    t = await Test.create(data = "test", created_at=datetime.datetime.now(), updated_at=datetime.datetime.now())
+    print(t.id, t.data)
+    async for i in Test.select().order_by(Test.id.desc()).limit(2):
+        print(i.id, i.data)
 
-    print ""
-    print ""
+    print("")
+    print("")
 
-    t = yield Test.select().order_by(Test.id.desc()).limit(1)[0]
-    print t.id, t.data, t.count
+    t = await Test.select().order_by(Test.id.desc()).limit(1)[0]
+    print(t.id, t.data, t.count)
     t.count += 1
-    yield t.save()
-    t = yield Test.select().order_by(Test.id.desc()).limit(1)[0]
-    print t.id, t.data, t.count
+    await t.save()
+    t = await Test.select().order_by(Test.id.desc()).limit(1)[0]
+    print(t.id, t.data, t.count)
 
-    print ""
-    print ""
+    print("")
+    print("")
 
-    with (yield db.transaction()) as transaction:
-        for i in (yield Test.use(transaction).select().order_by(Test.id.desc()).limit(2)):
-            print i.id, i.data
+    async with await db.transaction() as transaction:
+        t = await Test.use(transaction).select().order_by(Test.id.desc()).limit(1)[0]
+        print(t.id, t.data, t.count)
+        t.count += 1
+        await t.use(transaction).save()
 
-        print ""
-        t = yield Test.use(transaction).create(data="test", created_at=datetime.datetime.now(), updated_at=datetime.datetime.now())
-        print t.id, t.data
+        async for i in Test.use(transaction).select().order_by(Test.id.desc()).limit(2):
+            print(i.id, i.data)
 
-        for i in (yield Test.select().order_by(Test.id.desc()).limit(2)):
-            print i.id, i.data
+        print("")
+        t = await Test.use(transaction).create(data="test", created_at=datetime.datetime.now(), updated_at=datetime.datetime.now())
+        print(t.id, t.data)
 
-        print ""
-        for i in (yield Test.use(transaction).select().order_by(Test.id.desc()).limit(2)):
-            print i.id, i.data
+        async for i in Test.select().order_by(Test.id.desc()).limit(2):
+            print(i.id, i.data)
 
-    print ""
-    print ""
+        print("")
+        for i in (await Test.use(transaction).select().order_by(Test.id.desc()).limit(2)):
+            print(i.id, i.data)
 
-    yield run_transaction()
+    print("")
+    print("")
+
+    await run_transaction()
 
 ioloop.run_sync(run)
 ```
