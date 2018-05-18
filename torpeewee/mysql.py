@@ -119,17 +119,16 @@ class MySQLDatabase(AsyncMySQLDatabase):
     commit_select = True
 
     def __init__(self, *args, **kwargs):
-        autocommit = kwargs.pop("autocommit") if "autocommit" in kwargs else None
         kwargs["thread_safe"] = False
-
-        super(MySQLDatabase, self).__init__(*args, **kwargs)
-
         self._closed = True
         self._conn_pool = None
 
-        self.autocommit = autocommit
-        if self.autocommit:
-            self.connect_params["autocommit"] = autocommit
+        super(MySQLDatabase, self).__init__(*args, **kwargs)
+
+        self.connect_params["autocommit"] = False
+
+    def is_closed(self):
+        return self._closed
 
     def _connect(self):
         conn_kwargs = {
@@ -156,6 +155,7 @@ class MySQLDatabase(AsyncMySQLDatabase):
     async def connection(self):
         if self.is_closed():
             self.connect()
+            self._closed = False
         conn = await self._conn_pool.Connection()
         return conn
 
@@ -182,11 +182,11 @@ class MySQLDatabase(AsyncMySQLDatabase):
             await cursor.execute(sql, params or ())
             await cursor.close()
         except Exception:
-            if self.autorollback and not conn._connection.autocommit_mode:
+            if self.autorollback:
                 await conn.rollback()
             raise
         else:
-            if commit and not conn._connection.autocommit_mode:
+            if commit:
                 await conn.commit()
         finally:
             await self._close(conn)

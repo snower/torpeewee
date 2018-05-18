@@ -9,45 +9,50 @@ from .model import Test
 
 class TestQueryTestCase(BaseTestCase):
     @gen_test
-    def test(self):
-        yield Test.delete()
+    async def test(self):
+        await Test.delete()
 
-        yield Test.create(id=1, data="test", created_at=datetime.datetime.now(), updated_at=datetime.datetime.now())
-        yield Test.create(id=2, data="test", created_at=datetime.datetime.now(), updated_at=datetime.datetime.now())
+        await Test.create(id=1, data="test", created_at=datetime.datetime.now(), updated_at=datetime.datetime.now())
+        await Test.create(id=2, data="test", created_at=datetime.datetime.now(), updated_at=datetime.datetime.now())
 
-        c = yield Test.select().count()
+        c = await Test.select().count()
         assert c == 2, ''
 
-        data = [i for i in (yield Test.select())]
+        data = [i for i in (await Test.select())]
         assert len(data) == 2, ''
 
-        data = [i for i in (yield Test.select().where(Test.id>0))]
+        data = []
+        async for i in Test.select():
+            data.append(i)
         assert len(data) == 2, ''
 
-        data = [i for i in (yield Test.select().group_by(Test.data))]
+        data = [i for i in (await Test.select().where(Test.id>0))]
+        assert len(data) == 2, ''
+
+        data = [i for i in (await Test.select(Test.data).group_by(Test.data))]
         assert len(data) == 1, ''
 
-        data = [i for i in (yield Test.select().limit(1))]
+        data = [i for i in (await Test.select().limit(1))]
         assert len(data) == 1, ''
 
-        data = [i for i in (yield Test.select().order_by(Test.id.desc()))]
+        data = [i for i in (await Test.select().order_by(Test.id.desc()))]
         assert data[0].id == 2
 
-        t = yield Test.select().order_by(Test.id.desc()).first()
+        t = await Test.select().order_by(Test.id.desc()).first()
         t.data = "aaa"
-        yield t.save()
-        t = yield Test.select().order_by(Test.id.desc()).first()
+        await t.save()
+        t = await Test.select().order_by(Test.id.desc()).first()
         assert  t.data == 'aaa'
 
-        t = yield Test.select().order_by(Test.id.desc()).first()
-        yield t.delete_instance()
-        t = yield Test.select().where(Test.id == t.id).first()
+        t = await Test.select().order_by(Test.id.desc()).first()
+        await t.delete_instance()
+        t = await Test.select().where(Test.id == t.id).first()
         assert t is None
 
-        yield Test.update(data = '12345')
-        t = yield Test.select().order_by(Test.id.desc()).first()
+        await Test.update(data = '12345')
+        t = await Test.select().order_by(Test.id.desc()).first()
         assert t.data == '12345', ''
 
-        yield Test.delete()
-        c = yield Test.select().count()
+        await Test.delete()
+        c = await Test.select().count()
         assert c == 0, ''

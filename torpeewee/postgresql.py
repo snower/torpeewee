@@ -187,15 +187,15 @@ class Transaction(BaseTransaction, AsyncPostgresqlDatabase):
         if self.connection is None:
             await self.begin()
 
-        await self.cursor.execute(sql, params or ())
-        return Cursor(self.cursor)
+        cursor = await self.connection.cursor()
+        await cursor.execute(sql, params or ())
+        return Cursor(cursor)
 
     async def begin(self):
         self.connection = await self.database.connection()
         try:
             self.cursor = await self.connection.cursor()
-            self.aiopg_transaction = aiopg.Transaction(self.cursor, aiopg.IsolationLevel.repeatable_read)
-            await self.aiopg_transaction.begin()
+            self.aiopg_transaction = await self.cursor.begin()
         except:
             await self.close()
             raise
@@ -223,15 +223,14 @@ class Transaction(BaseTransaction, AsyncPostgresqlDatabase):
 
 class PostgresqlDatabase(AsyncPostgresqlDatabase):
     def __init__(self, *args, **kwargs):
-        autocommit = kwargs.pop("autocommit") if "autocommit" in kwargs else None
         kwargs["thread_safe"] = False
-
-        super(PostgresqlDatabase, self).__init__(*args, **kwargs)
-
         self._closed = True
         self._conn_pool = None
 
-        self.autocommit = autocommit
+        super(PostgresqlDatabase, self).__init__(*args, **kwargs)
+
+    def is_closed(self):
+        return self._closed
 
     def _connect(self):
         conn_kwargs = {
@@ -273,6 +272,7 @@ class PostgresqlDatabase(AsyncPostgresqlDatabase):
         if self.is_closed():
             self.connect()
             self._conn_pool = await self._conn_pool
+            self._closed = False
         conn = await self._conn_pool.acquire()
         return conn
 
@@ -283,17 +283,29 @@ class PostgresqlDatabase(AsyncPostgresqlDatabase):
             else:
                 commit = not sql[:6].lower().startswith('select')
 
+        if self.autorollback or commit:
+            conn = await self.connection()
+            try:
+                cursor = await conn.cursor()
+                transaction = await cursor.begin()
+                try:
+                    cursor = await conn.cursor()
+                    await cursor.execute(sql, params or ())
+                except Exception:
+                    if self.autorollback:
+                        await transaction.rollback()
+                    raise
+                else:
+                    if commit:
+                        await transaction.commit()
+            finally:
+                await self._close(conn)
+            return Cursor(cursor)
+
         conn = await self.connection()
         try:
             cursor = await conn.cursor()
             await cursor.execute(sql, params or ())
-        except Exception:
-            if self.autorollback and self.autocommit:
-                await conn.execute("ROLLBACK;")
-            raise
-        else:
-            if commit and self.autocommit:
-                await conn.execute("COMMIT;")
         finally:
             await self._close(conn)
         return Cursor(cursor)

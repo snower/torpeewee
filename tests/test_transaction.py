@@ -9,76 +9,75 @@ from . import BaseTestCase
 from .model import Test, db
 
 class TestTestCaseTransaction(BaseTestCase):
-    @gen.coroutine
-    def run_transaction(self, transaction):
-        yield Test.use(transaction).create(data="test", created_at=datetime.datetime.now(),
+    async def run_transaction(self, transaction):
+        await Test.use(transaction).create(data="test_run_transaction", created_at=datetime.datetime.now(),
                                                 updated_at=datetime.datetime.now())
 
-        count = yield Test.select().count()
+        count = await Test.select().count()
         assert count == 2, ""
-        count = yield Test.use(transaction).select().count()
+        count = await Test.use(transaction).select().count()
         assert count == 3, ""
 
     @gen_test
-    def test(self):
-        yield Test.delete()
-        yield Test.create(data="test", created_at=datetime.datetime.now(), updated_at=datetime.datetime.now())
+    async def test(self):
+        await Test.delete()
+        await Test.create(data="test", created_at=datetime.datetime.now(), updated_at=datetime.datetime.now())
 
-        with (yield db.transaction()) as transaction:
-            yield Test.use(transaction).create(data="test", created_at=datetime.datetime.now(),
+        async with await db.transaction() as transaction:
+            await Test.use(transaction).create(data="test", created_at=datetime.datetime.now(),
                                                    updated_at=datetime.datetime.now())
 
-            count = yield Test.select().count()
+            count = await Test.select().count()
             assert count == 1, ""
-            count = yield Test.use(transaction).select().count()
+            count = await Test.use(transaction).select().count()
             assert count == 2, ""
 
-            t = yield Test.use(transaction).select().order_by(Test.id.desc()).first()
+            t = await Test.use(transaction).select().order_by(Test.id.desc()).first()
             td = t.data
             t.data = "222"
-            yield t.use(transaction).save()
+            await t.use(transaction).save()
 
-            t = yield Test.use(transaction).select().order_by(Test.id.desc()).first()
+            t = await Test.use(transaction).select().order_by(Test.id.desc()).first()
             assert t.data == '222'
 
-            t = yield Test.select().order_by(Test.id.desc()).first()
+            t = await Test.select().order_by(Test.id.desc()).first()
             assert t.data == td
 
-        yield db.transaction()(self.run_transaction)()
+        await db.transaction()(self.run_transaction)()
 
-        transaction = yield db.transaction()
+        transaction = await db.transaction()
         try:
-            yield self.run_transaction(transaction)
+            await self.run_transaction(transaction)
         except:
-            yield transaction.rollback()
+            await transaction.rollback()
         else:
-            yield transaction.commit()
+            await transaction.commit()
 
-        with (yield db.transaction()) as transaction:
-            t = yield Test.use(transaction).select().order_by(Test.id.desc()).first()
+        async with await db.transaction() as transaction:
+            t = await Test.use(transaction).select().order_by(Test.id.desc()).first()
             t.data = "aaa"
-            yield t.use(transaction).save()
+            await t.use(transaction).save()
 
-        t = yield Test.select().order_by(Test.id.desc()).first()
+        t = await Test.select().order_by(Test.id.desc()).first()
         assert t.data == 'aaa'
 
-        with (yield db.transaction()) as transaction:
-            t = yield Test.use(transaction).select().order_by(Test.id.desc()).first()
-            yield t.use(transaction).delete_instance()
+        async with await db.transaction() as transaction:
+            t = await Test.use(transaction).select().order_by(Test.id.desc()).first()
+            await t.use(transaction).delete_instance()
 
-        t = yield Test.select().where(Test.id == t.id).first()
+        t = await Test.select().where(Test.id == t.id).first()
         assert t is None
 
-        with (yield db.transaction()) as transaction:
-            yield Test.use(transaction).update(data='12345')
+        async with await db.transaction() as transaction:
+            await Test.use(transaction).update(data='12345')
 
-        t = yield Test.select().order_by(Test.id.desc()).first()
+        t = await Test.select().order_by(Test.id.desc()).first()
         assert t.data == '12345', ''
 
-        with (yield db.transaction()) as transaction:
-            yield Test.use(transaction).delete()
+        async with await db.transaction() as transaction:
+            await Test.use(transaction).delete()
 
-        c = yield Test.select().count()
+        c = await Test.select().count()
         assert c == 0, ''
 
-        yield Test.delete()
+        await Test.delete()

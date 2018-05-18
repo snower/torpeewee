@@ -7,6 +7,8 @@ from peewee import ModelSelect as BaseModelSelect, NoopModelSelect as BaseNoopMo
     ModelInsert as BaseModelInsert, ModelDelete as BaseModelDelete, ModelRaw as BaseModelRaw
 
 class FutureSelect(object):
+    _cursor_wrapper_iter = None
+
     async def _execute(self, database):
         if self._cursor_wrapper is None:
             cursor = await database.execute(self)
@@ -87,6 +89,17 @@ class FutureSelect(object):
 
     async def len(self):
         return len((await self.execute()))
+
+    async def __aiter__(self):
+        self._cursor_wrapper_iter = iter(await self.execute())
+        return self
+
+    async def __anext__(self):
+        try:
+            value = next(self._cursor_wrapper_iter)
+        except StopIteration:
+            raise StopAsyncIteration
+        return value
 
 
 class Select(FutureSelect, BaseSelect):

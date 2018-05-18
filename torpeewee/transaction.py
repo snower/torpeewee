@@ -89,6 +89,23 @@ class Transaction(object):
                 self.rollback()
                 raise exc_info[1].with_traceback(exc_info[2])
 
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        if self.connection is None:
+            return
+
+        if exc_type:
+            await self.rollback()
+        else:
+            try:
+                await self.commit()
+            except:
+                exc_info = sys.exc_info()
+                await self.rollback()
+                raise exc_info[1].with_traceback(exc_info[2])
+
     async def close(self):
         if self.connection:
             await self.database._close(self.connection)

@@ -5,23 +5,36 @@
 import os
 from torpeewee import *
 
-PARAMS = dict(
-    host=os.getenv("MYSQL_HOST", "127.0.0.1"),
-    port=int(os.getenv("MYSQL_PORT", "3306")),
-    user=os.getenv("MYSQL_USER", "root"),
-    passwd=os.getenv("MYSQL_PASSWD", ""),
-    charset=os.getenv("MYSQL_CHARSET", "utf8"),
-    no_delay=True,
-    sql_mode="REAL_AS_FLOAT",
-    init_command="SET max_join_size=DEFAULT"
-)
+if os.getenv("TEST_DRIVER", "mysql") == "mysql":
+    PARAMS = dict(
+        host=os.getenv("MYSQL_HOST", "127.0.0.1"),
+        port=int(os.getenv("MYSQL_PORT", "3306")),
+        user=os.getenv("MYSQL_USER", "root"),
+        passwd=os.getenv("MYSQL_PASSWD", ""),
+        charset=os.getenv("MYSQL_CHARSET", "utf8"),
+        no_delay=True,
+        sql_mode="REAL_AS_FLOAT",
+        init_command="SET max_join_size=DEFAULT"
+    )
 
-db = MySQLDatabase(
-    os.getenv("MYSQL_DB", "test"),
-    max_connections=int(os.getenv("MYSQL_POOL", 5)),
-    idle_seconds=7200,
-    **PARAMS
-)
+    db = MySQLDatabase(
+        os.getenv("MYSQL_DB", "test"),
+        max_connections=int(os.getenv("MYSQL_POOL", 5)),
+        idle_seconds=7200,
+        **PARAMS
+    )
+else:
+    PARAMS = dict(
+        host=os.getenv("POSTGRESQL_HOST", "127.0.0.1"),
+        port=int(os.getenv("POSTGRESQL_PORT", "5432")),
+        user=os.getenv("POSTGRESQL_USER", "root"),
+        passwd=os.getenv("POSTGRESQL_PASSWD", ""),
+    )
+
+    db = PostgresqlDatabase(
+        os.getenv("POSTGRESQL_DB", "test"),
+        **PARAMS
+    )
 
 class Test(Model):
     id = IntegerField(primary_key=True)
