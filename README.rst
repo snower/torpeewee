@@ -27,7 +27,7 @@ Examples
     # create by: snower
 
     import datetime
-    from tornado.ioloop import IOLoop
+    import asyncio
     from torpeewee import *
 
     db = MySQLDatabase("test", host="127.0.0.1", port=3306, user="root", passwd="123456")
@@ -42,8 +42,6 @@ Examples
         count = IntegerField(default=0)
         created_at = DateTimeField()
         updated_at = DateTimeField()
-
-    ioloop = IOLoop.instance()
 
     @db.transaction()
     async def run_transaction(transaction):
@@ -120,7 +118,8 @@ Examples
 
         await run_transaction()
 
-    ioloop.run_sync(run)
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(run())
 
 License
 =======
