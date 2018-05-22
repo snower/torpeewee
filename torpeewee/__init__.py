@@ -1,5 +1,5 @@
 '''
-TorMySQL: presents a Tornado Future-based API and greenlet for non-blocking access to MySQL.
+torpeewee: Tornado and asyncio asynchronous ORM by peewee.
 
 The MIT License (MIT)
 
