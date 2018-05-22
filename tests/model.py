@@ -19,7 +19,7 @@ if os.getenv("TEST_DRIVER", "mysql") == "mysql":
 
     db = MySQLDatabase(
         os.getenv("MYSQL_DB", "test"),
-        max_connections=int(os.getenv("MYSQL_POOL", 5)),
+        max_connections=int(os.getenv("MYSQL_POOL", 20)),
         idle_seconds=7200,
         **PARAMS
     )
