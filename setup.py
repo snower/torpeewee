@@ -24,7 +24,7 @@ setup(
     keywords=[
         "tornado", "asyncio", "mysql", "postgresql", "orm", "tormysql", "asyncpg"
     ],
-    description='Tornado asynchronous ORM by peewee',
+    description='Tornado and asyncio asynchronous ORM by peewee',
     long_description=open("README.rst").read(),
     zip_safe=False,
 )

@@ -119,6 +119,9 @@ class MySQLDatabase(AsyncMySQLDatabase):
     commit_select = True
 
     def __init__(self, *args, **kwargs):
+        if tormysql is None or tormysql.version < '0.3.8':
+            raise ImportError("use MySQL require install tormysql>=0.3.8")
+
         kwargs["thread_safe"] = False
         self._closed = True
         self._conn_pool = None

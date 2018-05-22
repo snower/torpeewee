@@ -2,11 +2,11 @@
 
 [![Build Status](https://travis-ci.org/snower/torpeewee.svg?branch=master)](https://travis-ci.org/snower/torpeewee)
 
-Tornado asynchronous ORM by peewee
+Tornado and asyncio asynchronous ORM by peewee
 
 # About
 
-torpeewee - Tornado asynchronous ORM by peewee.
+torpeewee - Tornado and asyncio asynchronous ORM by peewee.
 
 # Installation
 

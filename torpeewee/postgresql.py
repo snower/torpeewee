@@ -223,6 +223,9 @@ class Transaction(BaseTransaction, AsyncPostgresqlDatabase):
 
 class PostgresqlDatabase(AsyncPostgresqlDatabase):
     def __init__(self, *args, **kwargs):
+        if aiopg is None or aiopg.version < '0.14.0':
+            raise ImportError("use Postgresql require install aiopg>=0.14.0")
+
         kwargs["thread_safe"] = False
         self._closed = True
         self._conn_pool = None
