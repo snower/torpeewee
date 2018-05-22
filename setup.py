@@ -15,7 +15,7 @@ setup(
     extras_require={
         'tornado': ['tornado>=5.0'],
         'tormysql': ['tormysql>=0.3.8'],
-        'asyncpg': ['asyncpg>=0.15.0'],
+        'asyncpg': ['aiopg>=0.14.0'],
     },
     author=['snower'],
     author_email=['sujian199@gmail.com'],
