@@ -3,7 +3,7 @@ torpeewee: Tornado and asyncio asynchronous ORM by peewee.
 
 The MIT License (MIT)
 
-Copyright (c) 2014, 2015 TorMySQL contributors
+Copyright (c) 2014, 2015 torpeewee contributors
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
