@@ -2,13 +2,14 @@
 # 16/6/28
 # create by: snower
 
-from peewee import PostgresqlDatabase as BasePostgresqlDatabase, IndexMetadata, ColumnMetadata, ForeignKeyMetadata, sort_models, SENTINEL
-from .transaction import Transaction as BaseTransaction
+from peewee import PostgresqlDatabase as BasePostgresqlDatabase, IndexMetadata, ViewMetadata, ColumnMetadata, ForeignKeyMetadata, sort_models, SENTINEL
+from .transaction import Atomic, Transaction as BaseTransaction
 
 try:
     import aiopg
 except ImportError:
     aiopg = None
+
 
 class AsyncPostgresqlDatabase(BasePostgresqlDatabase):
     def begin(self):
@@ -47,8 +48,8 @@ class AsyncPostgresqlDatabase(BasePostgresqlDatabase):
     def savepoint(self, sid=None):
         raise NotImplementedError
 
-    def atomic(self, transaction_type=None):
-        raise NotImplementedError
+    def atomic(self, *args, **kwargs):
+        return Atomic(self, *args, **kwargs)
 
     async def table_exists(self, table, schema=None):
         return table.__name__ in (await self.get_tables(schema=schema))
@@ -56,28 +57,35 @@ class AsyncPostgresqlDatabase(BasePostgresqlDatabase):
     async def get_tables(self, schema=None):
         query = ('SELECT tablename FROM pg_catalog.pg_tables '
                  'WHERE schemaname = %s ORDER BY tablename')
-
         cursor = await self.execute_sql(query, (schema or 'public',))
         return [table for table, in cursor.fetchall()]
+
+    async def get_views(self, schema=None):
+        query = ('SELECT viewname, definition FROM pg_catalog.pg_views '
+                 'WHERE schemaname = %s ORDER BY viewname')
+        cursor = await self.execute_sql(query, (schema or 'public',))
+        return [ViewMetadata(view_name, sql.strip(' \t;'))
+                for (view_name, sql) in cursor.fetchall()]
 
     async def get_indexes(self, table, schema=None):
         query = """
             SELECT
                 i.relname, idxs.indexdef, idx.indisunique,
-                array_to_string(array_agg(cols.attname), ',')
+                array_to_string(ARRAY(
+                    SELECT pg_get_indexdef(idx.indexrelid, k + 1, TRUE)
+                    FROM generate_subscripts(idx.indkey, 1) AS k
+                    ORDER BY k), ',')
             FROM pg_catalog.pg_class AS t
             INNER JOIN pg_catalog.pg_index AS idx ON t.oid = idx.indrelid
             INNER JOIN pg_catalog.pg_class AS i ON idx.indexrelid = i.oid
             INNER JOIN pg_catalog.pg_indexes AS idxs ON
                 (idxs.tablename = t.relname AND idxs.indexname = i.relname)
-            LEFT OUTER JOIN pg_catalog.pg_attribute AS cols ON
-                (cols.attrelid = t.oid AND cols.attnum = ANY(idx.indkey))
             WHERE t.relname = %s AND t.relkind = %s AND idxs.schemaname = %s
-            GROUP BY i.relname, idxs.indexdef, idx.indisunique
             ORDER BY idx.indisunique DESC, i.relname;"""
         cursor = await self.execute_sql(query, (table, 'r', schema or 'public'))
-        return [IndexMetadata(row[0], row[1], row[3].split(','), row[2], table)
-                for row in cursor.fetchall()]
+        return [IndexMetadata(name, sql.rstrip(' ;'), columns.split(','),
+                              is_unique, table)
+                for name, sql, is_unique, columns in cursor.fetchall()]
 
     async def get_columns(self, table, schema=None):
         query = """
@@ -108,12 +116,14 @@ class AsyncPostgresqlDatabase(BasePostgresqlDatabase):
 
     async def get_foreign_keys(self, table, schema=None):
         sql = """
-            SELECT
+            SELECT DISTINCT
                 kcu.column_name, ccu.table_name, ccu.column_name
             FROM information_schema.table_constraints AS tc
             JOIN information_schema.key_column_usage AS kcu
                 ON (tc.constraint_name = kcu.constraint_name AND
-                    tc.constraint_schema = kcu.constraint_schema)
+                    tc.constraint_schema = kcu.constraint_schema AND
+                    tc.table_name = kcu.table_name AND
+                    tc.table_schema = kcu.table_schema)
             JOIN information_schema.constraint_column_usage AS ccu
                 ON (ccu.constraint_name = tc.constraint_name AND
                     ccu.constraint_schema = tc.constraint_schema)
@@ -125,8 +135,13 @@ class AsyncPostgresqlDatabase(BasePostgresqlDatabase):
         return [ForeignKeyMetadata(row[0], row[1], row[2], table)
                 for row in cursor.fetchall()]
 
-    async def sequence_exists(self, seq):
-        raise NotImplementedError
+    async def sequence_exists(self, sequence):
+        res = await self.execute_sql("""
+            SELECT COUNT(*) FROM pg_class, pg_namespace
+            WHERE relkind='S'
+                AND pg_class.relnamespace = pg_namespace.oid
+                AND relname=%s""", (sequence,))
+        return bool(res.fetchone()[0])
 
     async def create_tables(self, models, **options):
         for model in sort_models(models):
@@ -135,6 +150,7 @@ class AsyncPostgresqlDatabase(BasePostgresqlDatabase):
     async def drop_tables(self, models, **kwargs):
         for model in reversed(sort_models(models)):
             await model.drop_table(**kwargs)
+
 
 class Cursor(object):
     _cursor = None
@@ -173,6 +189,7 @@ class Cursor(object):
 
     def __getattr__(self, item):
         return getattr(self._cursor, item)
+
 
 class Transaction(BaseTransaction, AsyncPostgresqlDatabase):
     def __init__(self, database, args_name):
@@ -220,6 +237,7 @@ class Transaction(BaseTransaction, AsyncPostgresqlDatabase):
             self.connection = None
             self.cursor = None
             self.aiopg_transaction = None
+
 
 class PostgresqlDatabase(AsyncPostgresqlDatabase):
     def __init__(self, *args, **kwargs):
@@ -278,6 +296,9 @@ class PostgresqlDatabase(AsyncPostgresqlDatabase):
             self._closed = False
         conn = await self._conn_pool.acquire()
         return conn
+
+    def in_transaction(self):
+        return False
 
     async def execute_sql(self, sql, params=None, commit=SENTINEL):
         if commit is SENTINEL:

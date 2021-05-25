@@ -7,6 +7,27 @@ from functools import wraps
 import asyncio
 from peewee import SENTINEL
 
+class Atomic(object):
+    def __init__(self, db, *args, **kwargs):
+        self.db = db
+        self._transaction_args = (args, kwargs)
+        self._transaction = None
+
+    def __enter__(self):
+        raise NotImplementedError
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        raise NotImplementedError
+
+    async def __aenter__(self):
+        args, kwargs = self._transaction_args
+        self._transaction = self.db.transaction(*args, **kwargs)
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        return await self._transaction.__aexit__(exc_type, exc_val, exc_tb)
+
+
 class Transaction(object):
     def __init__(self, database, args_name):
         self.database = database
@@ -27,6 +48,9 @@ class Transaction(object):
 
         cursor = await self.connection.cursor()
         return cursor
+
+    def in_transaction(self):
+        return True
 
     async def execute_sql(self, sql, params=None, commit=SENTINEL):
         if self.connection is None:

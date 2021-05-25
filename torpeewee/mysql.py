@@ -2,8 +2,8 @@
 # 16/6/28
 # create by: snower
 
-from peewee import MySQLDatabase as BaseMySQLDatabase, IndexMetadata, ColumnMetadata, ForeignKeyMetadata, sort_models, SENTINEL
-from .transaction import Transaction as BaseTransaction
+from peewee import MySQLDatabase as BaseMySQLDatabase, IndexMetadata, ViewMetadata, ColumnMetadata, ForeignKeyMetadata, sort_models, SENTINEL
+from .transaction import Atomic, Transaction as BaseTransaction
 
 try:
     import tormysql
@@ -47,14 +47,24 @@ class AsyncMySQLDatabase(BaseMySQLDatabase):
     def savepoint(self, sid=None):
         raise NotImplementedError
 
-    def atomic(self, transaction_type=None):
-        raise NotImplementedError
+    def atomic(self, *args, **kwargs):
+        return Atomic(self, *args, **kwargs)
 
     async def table_exists(self, table, schema=None):
         return table.__name__ in (await self.get_tables(schema=schema))
 
     async def get_tables(self, schema=None):
-        return [row for row, in (await self.execute_sql('SHOW TABLES'))]
+        query = ('SELECT table_name FROM information_schema.tables '
+                 'WHERE table_schema = DATABASE() AND table_type != %s '
+                 'ORDER BY table_name')
+        return [row for row, in (await self.execute_sql(query, ('VIEW',)))]
+
+    async def get_views(self, schema=None):
+        query = ('SELECT table_name, view_definition '
+                 'FROM information_schema.views '
+                 'WHERE table_schema = DATABASE() ORDER BY table_name')
+        cursor = await self.execute_sql(query)
+        return [ViewMetadata(*row) for row in cursor.fetchall()]
 
     async def get_indexes(self, table, schema=None):
         cursor = await self.execute_sql('SHOW INDEX FROM `%s`' % table)
@@ -115,6 +125,7 @@ class Transaction(BaseTransaction, AsyncMySQLDatabase):
 
         self.connection = None
 
+
 class MySQLDatabase(AsyncMySQLDatabase):
     commit_select = True
 
@@ -172,6 +183,9 @@ class MySQLDatabase(AsyncMySQLDatabase):
             self._initialize_connection(self._conn_pool)
         return True
 
+    def in_transaction(self):
+        return False
+
     async def execute_sql(self, sql, params=None, commit=SENTINEL):
         if commit is SENTINEL:
             if self.commit_select:
@@ -199,7 +213,7 @@ class MySQLDatabase(AsyncMySQLDatabase):
         conn = await self.connection()
         return conn.cursor()
 
-    def transaction(self, args_name = "transaction"):
+    def transaction(self, args_name="transaction"):
         return Transaction(self, args_name)
 
     def commit_on_success(self, func):

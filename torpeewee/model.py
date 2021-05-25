@@ -9,6 +9,7 @@ from .query import ModelSelect, NoopModelSelect, ModelUpdate, ModelInsert, Model
 if sys.version_info[0] == 3:
     basestring = str
 
+
 class SchemaManager(BaseSchemaManager):
     async def create_table(self, safe=True, **options):
         await self.database.execute(self._create_table(safe=safe, **options))
@@ -59,6 +60,7 @@ class SchemaManager(BaseSchemaManager):
         if drop_sequences:
             await self.drop_sequences()
 
+
 class Model(BaseModel):
     class Meta:
         schema_manager_class = SchemaManager
@@ -71,7 +73,6 @@ class Model(BaseModel):
         def _(using):
             self._use_database = using
             return self
-
         self.use = _
 
     @classmethod
@@ -138,7 +139,7 @@ class Model(BaseModel):
             try:
                 if defaults:
                     kwargs.update(defaults)
-                with cls._meta.database.atomic():
+                async with cls._meta.database.atomic():
                     result = await cls.create(**kwargs), True
             except IntegrityError as exc:
                 try:
@@ -147,7 +148,7 @@ class Model(BaseModel):
                     raise exc
         return result
 
-    async def save(self, force_insert=False, only=None, using = None):
+    async def save(self, force_insert=False, only=None, using=None):
         use_database = using or self._use_database
 
         field_dict = self.__data__.copy()
@@ -165,43 +166,45 @@ class Model(BaseModel):
                 return False
 
         self._populate_unsaved_relations(field_dict)
+        rows = 1
+
+        if self._meta.auto_increment and pk_value is None:
+            field_dict.pop(pk_field.name, None)
+
         if pk_value is not None and not force_insert:
             if self._meta.composite_key:
                 for pk_part_name in pk_field.field_names:
                     field_dict.pop(pk_part_name, None)
             else:
                 field_dict.pop(pk_field.name, None)
+            if not field_dict:
+                raise ValueError('no data to save!')
             if use_database:
                 rows = await self.__class__.use(use_database).update(**field_dict).where(self._pk_expr()).execute()
             else:
                 rows = await self.update(**field_dict).where(self._pk_expr()).execute()
-        elif pk_field is None or not self._meta.auto_increment:
+        elif pk_field is None:
+            if use_database:
+                pk = await self.__class__.use(use_database).insert(**field_dict).execute()
+            else:
+                pk = await self.insert(**field_dict).execute()
+            if pk is not None and (self._meta.auto_increment or
+                                   pk_value is None):
+                setattr(self, self._meta.primary_key.name, pk)
+        else:
             if use_database:
                 await self.__class__.use(use_database).insert(**field_dict).execute()
             else:
                 await self.insert(**field_dict).execute()
-            rows = 1
-        else:
-            if use_database:
-                pk_from_cursor = await self.__class__.use(use_database).insert(**field_dict).execute()
-            else:
-                pk_from_cursor = await self.insert(**field_dict).execute()
-            if pk_from_cursor is not None:
-                pk_value = pk_from_cursor
-            self._pk = pk_value
-            rows = 1
+
         self._dirty.clear()
         return rows
 
-    async def dependencies(self, search_nullable=False, using = None):
+    async def dependencies(self, search_nullable=False, using=None):
         use_database = using or self._use_database
 
         model_class = type(self)
-        if use_database:
-            query = await self.__class__.use(use_database).select(self._meta.primary_key).where(self._pk_expr())
-        else:
-            query = await self.select(self._meta.primary_key).where(self._pk_expr())
-        stack = [(type(self), query)]
+        stack = [(type(self), None)]
         seen = set()
         result = []
 
@@ -211,7 +214,7 @@ class Model(BaseModel):
                 continue
             seen.add(klass)
             for fk, rel_model in klass._meta.backrefs.items():
-                if rel_model is model_class:
+                if rel_model is model_class or query is None:
                     node = (fk == self.__data__[fk.rel_field.name])
                 else:
                     node = fk << query
@@ -257,6 +260,8 @@ class Model(BaseModel):
         if safe and not cls._meta.database.safe_create_index \
                 and (await cls.table_exists()):
             return
+        if cls._meta.temporary:
+            options.setdefault('temporary', cls._meta.temporary)
         await cls._schema.create_all(safe, **options)
 
     @classmethod
@@ -264,6 +269,8 @@ class Model(BaseModel):
         if safe and not cls._meta.database.safe_drop_index \
                 and not (await cls.table_exists()):
             return
+        if cls._meta.temporary:
+            options.setdefault('temporary', cls._meta.temporary)
         await cls._schema.drop_all(safe, drop_sequences, **options)
 
     @classmethod
