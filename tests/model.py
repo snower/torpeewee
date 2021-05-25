@@ -12,7 +12,6 @@ if os.getenv("TEST_DRIVER", "mysql") == "mysql":
         user=os.getenv("MYSQL_USER", "root"),
         passwd=os.getenv("MYSQL_PASSWD", ""),
         charset=os.getenv("MYSQL_CHARSET", "utf8"),
-        no_delay=True,
         sql_mode="REAL_AS_FLOAT",
         init_command="SET max_join_size=DEFAULT"
     )

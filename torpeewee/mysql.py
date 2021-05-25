@@ -50,8 +50,8 @@ class AsyncMySQLDatabase(BaseMySQLDatabase):
     def atomic(self, *args, **kwargs):
         return Atomic(self, *args, **kwargs)
 
-    async def table_exists(self, table, schema=None):
-        return table.__name__ in (await self.get_tables(schema=schema))
+    async def table_exists(self, table_name, schema=None):
+        return table_name in (await self.get_tables(schema=schema))
 
     async def get_tables(self, schema=None):
         query = ('SELECT table_name FROM information_schema.tables '
