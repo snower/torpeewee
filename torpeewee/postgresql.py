@@ -338,7 +338,7 @@ class PostgresqlDatabase(AsyncPostgresqlDatabase):
         conn = await self.connection()
         return conn.cursor()
 
-    def transaction(self, args_name = "transaction"):
+    def transaction(self, args_name="transaction"):
         return Transaction(self, args_name)
 
     def commit_on_success(self, func):

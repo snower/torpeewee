@@ -7,6 +7,7 @@ from functools import wraps
 import asyncio
 from peewee import SENTINEL
 
+
 class Atomic(object):
     def __init__(self, db, *args, **kwargs):
         self.db = db
@@ -136,4 +137,5 @@ class Transaction(object):
             self.connection = None
 
     def __del__(self):
-        asyncio.ensure_future(self.rollback())
+        if self.connection:
+            asyncio.ensure_future(self.rollback())
