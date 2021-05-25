@@ -2,3 +2,4 @@ nose
 coverage
 tormysql>=0.3.8
 aiopg>=0.14.0
+tornado
