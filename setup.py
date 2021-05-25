@@ -17,8 +17,8 @@ setup(
         'tormysql': ['tormysql>=0.3.8'],
         'asyncpg': ['aiopg>=0.14.0'],
     },
-    author=['snower'],
-    author_email=['sujian199@gmail.com'],
+    author='snower',
+    author_email='sujian199@gmail.com',
     url='https://github.com/snower/torpeewee',
     license='MIT',
     keywords=[
